@@ -184,3 +184,50 @@ hen-grenade/
 ## 10. What we are deliberately not building yet
 
 Online play, a map editor, mod support, a replay viewer UI (the format exists; the UI does not), and cosmetics. The architecture leaves room for the first two; the rest are out of scope until the couch game is fun.
+
+---
+
+## Appendix A — M0 implementation notes (lessons learned)
+
+These are Godot-specific facts that bit us during M0 and are worth remembering for later milestones. They are implementation realities, not design changes. Numbered so later milestones can append their own.
+
+### A.1 `godot --headless --import` does not fully compile scene scripts
+
+The import step registers class names and imports assets, but it does **not** fully parse every scene-attached GDScript the way a real run does. Type errors and bad enum references in scene scripts (e.g. `Vector2i + Vector2`, `Control.VALIGN_TOP`) only surface when the scene is actually loaded/instantiated. **Implication for CI:** `--import` is a prerequisite, not a verification — it will not catch script bugs on its own. The test/CI pipeline must actually load or run scenes. M1 should add a scene-smoke step to CI (instantiate each scene, step a few physics ticks, assert no errors), not just `--import`.
+
+### A.2 Autoloads are not registered in `--script` mode
+
+Running a custom main loop with `godot --headless --script res://foo.gd` does **not** instantiate project autoloads, so any script referencing an autoload global (e.g. `DeviceManager`) fails to compile in that mode. `class_name` globals **are** available; autoloads are not. Headless test scripts therefore cannot reference autoloads. The sim layer is pure (no autoloads), so M1's sim tests are fine; anything that needs `DeviceManager` must be tested by running the actual game, not via `--script`.
+
+### A.3 Running a scene via the editor binary opens the editor, not the game
+
+`godot --headless --path <project> res://scene.tscn` opens the scene in the headless **editor** (which then waits); it does not run the scene as a game. To run a specific scene headless without exporting: either set it as `run/main_scene` and run `godot --headless --path <project>`, or use `--script` with a `SceneTree` (subject to A.2). For CI artifact verification, prefer exporting and running the export.
+
+### A.4 `SceneTree._iteration` is not overridable from GDScript
+
+A `--script` that `extends SceneTree` and overrides `_iteration` will not have `_iteration` called — the engine drives the C++ `SceneTree::_iteration` directly, so a GDScript override is silently ignored and the loop never quits. A custom main loop can do setup in `_initialize`/`_init` and call `quit()` from there; for per-frame work, drive it manually (call `_physics_process`/`_process` on the scene root from `_initialize`) rather than relying on `_iteration`.
+
+### A.5 GDScript has no implicit cross-type vector arithmetic
+
+`Vector2i + Vector2` is a parse error; cast explicitly (`Vector2(C.ARENA_ORIGIN) + v`). Assignment of `Vector2i` to a `Vector2` property **is** auto-converted, but arithmetic is not. **Coding convention for the whole project:** when mixing `Vector2i` constants (like `C.ARENA_ORIGIN`) with `Vector2` math, wrap the constant in `Vector2(...)`.
+
+### A.6 Theme font access on Node2D
+
+`get_theme_default_font()` is not available on `Node2D` (and was removed in Godot 4.7). For text in `Node2D` scenes, prefer `Label` nodes over `draw_string` with a theme font — it is robust across versions and needs no font-API lookup. If `draw_string` is ever required, `ThemeDB.get_default_theme().get_font(...)` works, but the enum/StringName fragility makes `Label` the safer default.
+
+### A.7 `vertical_alignment` enum names are version-fragile
+
+`Control.VALIGN_TOP` is Godot 3; `Control.VERTICAL_ALIGNMENT_TOP` does not exist in 4.7 either. Set `label.vertical_alignment = 0` (top) as an **integer** — it is stable across versions. Avoid the named enum for this property.
+
+### A.8 Export templates folder uses a dot, not a hyphen
+
+`.godot-version` and the GitHub release tag use `4.7.2-stable` (hyphen), but the export-templates directory Godot looks for is `4.7.2.stable` (dot) — the editor's `--version` string form. CI must convert (`${V/-stable/.stable}`) when placing templates, or the export fails with "no templates found".
+
+### A.9 `.uid` files are committed
+
+Godot 4.4+ writes a `<script>.uid` beside every GDScript; these are stable resource identifiers and should be committed (they are **not** in `.gitignore`). The M0 brief's `.gitignore` list predates this and does not mention them; they are part of the repo.
+
+### A.10 No separate headless download since Godot 4.0
+
+Since Godot 4.0 there is **no** `Godot_v<x>_linux_headless.*.zip` release asset — the standard editor binary (`Godot_v<x>-stable_linux.x86_64.zip`) is run with `--headless` for import, tests, and exports. CI must download the `linux.x86_64.zip` asset (not a `_linux_headless` one, which 404s) and invoke it with `--headless`. The renamed binary is still called `godot_headless` in CI purely as a stable local path name.
+

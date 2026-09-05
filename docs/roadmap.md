@@ -12,7 +12,7 @@ Each milestone ends in something runnable on **both** targets. Estimates assume 
 
 **The goal is to be wrong early.** Nothing here is gameplay. Implementation-level detail — project settings, skeleton architecture, input contracts, the benchmark scene composition, and the measurement protocol — is in the [Milestone 0 build brief](milestone-0-brief.md).
 
-- Godot 4.6.3 pinned in `.godot-version`; empty project with the repo layout from the technical design.
+- Godot 4.7.2 pinned in `.godot-version`; empty project with the repo layout from the technical design.
 - A throwaway scene at the real 640 × 360 base resolution with the full 25 × 15 tilemap, four coloured squares moving around it, and a frame-time overlay.
 - **A deliberate worst-case stress scene**, not a hello-world: every crate on screen, a large chain reaction, four squares moving, a regeneration wave landing. Whatever the Pi 400 does here is the honest number.
 - **Export to Windows x86_64 and Linux arm64 and run both**, with the Pi 400 as the reference machine.

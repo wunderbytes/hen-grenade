@@ -1,0 +1,16 @@
+# Godot import/editor cache
+.godot/
+
+# Build output
+build/
+
+# Temp files
+*.tmp
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editor user settings (keep project.godot and export_presets.cfg under VCS)
+*.csproj
+*.sln

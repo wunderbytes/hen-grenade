@@ -29,13 +29,13 @@ Bombs, blasts, crates as gameplay, power-ups, respawn, scoring, the round clock,
 
 | Thing | Value |
 |---|---|
-| Engine | **Godot 4.6.3-stable**, standard (non-.NET) build |
+| Engine | **Godot 4.7.2-stable**, standard (non-.NET) build |
 | Language | GDScript, statically typed |
 | Dev OS | Windows 11 x86_64 |
 | Target | Raspberry Pi 400, Raspberry Pi OS (Debian 13 trixie) arm64 |
 | Test hardware | 1 × Pi 400, 4 × Logitech F310, 1 × powered USB hub, micro-HDMI cable, a TV or monitor |
 
-Pin the version in a `.godot-version` file at the repo root containing exactly `4.6.3-stable`. CI reads this file rather than hardcoding a version in the workflow, so upgrading is a one-line change.
+Pin the version in a `.godot-version` file at the repo root containing exactly `4.7.2-stable`. CI reads this file rather than hardcoding a version in the workflow, so upgrading is a one-line change.
 
 ---
 
@@ -297,7 +297,7 @@ Commit `export_presets.cfg` with two presets:
 | `Windows Desktop` | Windows Desktop | x86_64 | `build/windows/HenGrenade.exe` |
 | `Linux arm64` | Linux | arm64 | `build/linux-arm64/HenGrenade.arm64` |
 
-Export templates for 4.6.3 must be installed; the official `.tpz` includes Linux arm64, so no cross-compilation toolchain is needed.
+Export templates for 4.7.2 must be installed; the official `.tpz` includes Linux arm64, so no cross-compilation toolchain is needed.
 
 `tools/deploy-pi.sh` — rsync the arm64 binary and `.pck` to the Pi, `chmod +x`, and optionally launch. Launch with `--rendering-driver opengl3` explicitly during M0 so there is no ambiguity about which renderer produced a number.
 
