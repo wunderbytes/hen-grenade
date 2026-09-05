@@ -10,13 +10,13 @@ Each milestone ends in something runnable on **both** targets. Estimates assume 
 
 ## M0 — Hardware spike and skeleton *(~1 week)*
 
-**The goal is to be wrong early.** Nothing here is gameplay.
+**The goal is to be wrong early.** Nothing here is gameplay. Implementation-level detail — project settings, skeleton architecture, input contracts, the benchmark scene composition, and the measurement protocol — is in the [Milestone 0 build brief](milestone-0-brief.md).
 
 - Godot 4.6.3 pinned in `.godot-version`; empty project with the repo layout from the technical design.
 - A throwaway scene at the real 640 × 360 base resolution with the full 25 × 15 tilemap, four coloured squares moving around it, and a frame-time overlay.
 - **A deliberate worst-case stress scene**, not a hello-world: every crate on screen, a large chain reaction, four squares moving, a regeneration wave landing. Whatever the Pi 400 does here is the honest number.
 - **Export to Windows x86_64 and Linux arm64 and run both**, with the Pi 400 as the reference machine.
-- Confirm the game **sets its own 720p/1080p video mode** rather than inheriting a 4K desktop, and measure the difference — this is a cheap check that prevents an expensive surprise later.
+- **Measure the stress scene at 720p, 1080p and 4K output** to find out how much the final upscale blit actually costs on this GPU, and confirm the borderless-720p-window default behaves. Cheap check now, expensive surprise later.
 - **Four Logitech F310s connected at once**, on Windows and on the Pi 400 through a powered hub, all four squares moving independently; unplug and replug one.
 - **The three-pads-plus-built-in-keyboard configuration**, which is the only four-player setup a stock Pi 400 supports without extra hardware.
 - GitHub Actions running headless Godot and building both artifacts.
@@ -112,7 +112,7 @@ Online multiplayer (the architecture is ready for lockstep or rollback), team ba
 | Risk | Impact | Mitigation |
 |---|---|---|
 | **Pi 400 cannot hold 60 FPS** | **High — the biggest single risk** | Its VideoCore VI is roughly half a Pi 5's GPU, so the positive Godot-on-Pi reports do not transfer, and Godot 4 tilemap games *have* been reported at single digits on this GPU. Hard ban on 2D lights (the documented culprit), 640 × 360 internal resolution, output capped at 1080p, Compatibility renderer, strict draw-call and particle budget, and an M0 exit criterion measured on a worst-case scene. Fallback if it still fails: drop to LÖVE per ADR 0001 |
-| User plugs the Pi 400 into a 4K TV and gets a 4K desktop | Medium | Nine times the fragment cost on the final upscale for no visual gain. The game sets its own video mode instead of inheriting the desktop's; verified in M0; called out in the setup guide |
+| User plugs the Pi 400 into a 4K TV and gets a 4K desktop | Medium | `viewport` stretch mode keeps scene cost fixed at 640 × 360 so only the final blit scales; default to a borderless 720p window; kiosk installer sets the mode via `xrandr`; measured at all three output resolutions in M0 |
 | Four controllers flaky on Pi 400 (power, enumeration, only three ports) | High | Proven in M0; powered hub is mandatory for four pads and says so in the setup guide; three-pads-plus-built-in-keyboard supported as a first-class alternative; X-mode documented; hot-plug handled as a first-class state |
 | Arena plays too large — four players rarely meet | Medium | Grid size is a data file, not code; speed and crate density are the first levers; answered at the M3 playtest |
 | Respawn deathmatch balance swings wildly (kit loss, spawn camping) | Medium | Spawn protection and the suicide penalty are in from M1; kit-loss fraction is a single tunable; bot soak test flags degenerate score spreads |

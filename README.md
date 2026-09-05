@@ -23,6 +23,7 @@ The tone is light and playful, but **the theme and the final title are deliberat
 | [Game design](docs/game-design.md) | What the game is: rules, arena, power-ups, modes, feel, non-goals |
 | [Technical design](docs/technical-design.md) | How it is built: simulation architecture, input, Pi performance budget, repo layout, testing |
 | [Roadmap](docs/roadmap.md) | Milestones M0–M6, exit criteria, and the risk register |
+| [Milestone 0 build brief](docs/milestone-0-brief.md) | The executable spec for the first milestone: project settings, skeleton architecture, input contracts, the benchmark scene, and the measurement protocol |
 | [ADR 0001 — Engine choice](docs/decisions/0001-engine-choice.md) | Why Godot 4.6 over LÖVE, pygame, SDL, and Bevy |
 
 ## The short version of the plan
