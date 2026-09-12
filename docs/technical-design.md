@@ -7,7 +7,7 @@ Engine choice and its rationale live in [ADR 0001](decisions/0001-engine-choice.
 | Target | Spec | Notes |
 |---|---|---|
 | Windows | 10/11, x86_64 | Primary development platform |
-| **Raspberry Pi 400**, Raspberry Pi OS (Debian 13 trixie), arm64 | BCM2711 (Cortex-A72 @ 1.8 GHz), VideoCore VI @ 500 MHz, OpenGL ES 3.1, 4 GB LPDDR4, microSD | **The runtime target.** Runtime only — the editor is never installed here |
+| **Raspberry Pi 400**, Raspberry Pi OS **32-bit (armhf / arm32)** | BCM2711 (Cortex-A72 @ 1.8 GHz), VideoCore VI @ 500 MHz, OpenGL ES 3.1, 4 GB LPDDR4, microSD | **The runtime target.** Runtime only — the editor is never installed here. The reference machine runs the 32-bit OS, so the shipped Linux binary is Godot's **`arm32`** export, not `arm64` |
 | Raspberry Pi 4B / Pi 5 / Pi 500 | — | Should all work; none of them is what we design against |
 | Desktop Linux x86_64 | Ubuntu/Debian current | Falls out of the Pi build for free; useful for CI |
 
@@ -65,7 +65,7 @@ Custom, grid-based, no physics engine:
 - A player is a point (their centre) plus a radius for corner assist; collision is tested against the tile grid, not against other bodies.
 - Movement resolves one axis at a time, applies lane snapping, then applies corner assist.
 - Bomb solidity uses a per-player "standing on my own bomb" exemption flag that clears the first tick the player's centre leaves that tile.
-- Blast resolution is a flood along four rays, computed once at detonation and stored as a tile list, not re-evaluated per frame. **Each flame tile carries the owning player index**, propagated through chain detonations, because that is what kill credit and the suicide penalty are derived from.
+- Blast resolution is a flood along four rays, computed once at detonation and stored as a tile list, not re-evaluated per frame. **Each flame tile carries the owning player index**, propagated through chain detonations from the player who *started* the chain, because that is what kill credit and the suicide penalty are derived from. See [game design §5.2](game-design.md) — the two documents disagreed on this until M1 settled it in favour of propagation.
 
 ## 3a. Round clock, respawn, and scoring
 
@@ -130,7 +130,7 @@ The VideoCore VI in a Pi 400 is a weak GPU — 500 MHz, roughly half a Pi 5's �
 - **We measure on real hardware from Milestone 0, and the thing we measure is the worst case**, not a hello-world scene: four players, maximum blast radii, a full chain reaction, and a crate-regeneration wave, all at once. A Pi 400 stays plugged in as the permanent perf reference — one specific machine, so the number means something.
 - Assets are loaded from **microSD**, which is slow. Keep the shipped `.pck` small, preload everything at startup behind the title screen, and never load during a round.
 
-Export note carried from the ADR: enable **both** `Import S3TC BPTC` and `Import ETC2 ASTC` in Project Settings → Rendering → Textures, or arm64 builds fail at load with "No loader found for resource".
+Export note carried from the ADR: enable **both** `Import S3TC BPTC` and `Import ETC2 ASTC` in Project Settings → Rendering → Textures, or ARM builds fail at load with "No loader found for resource". Those two settings govern the *import* side; the Linux arm32 **export preset** additionally needs `texture_format/etc2_astc=true`, which is not the Godot default and is the same trap wearing a different hat.
 
 ## 6. Data-driven tuning
 
@@ -169,16 +169,16 @@ hen-grenade/
 
 ## 8. Testing strategy
 
-- **Unit tests (GUT)** on `src/sim` — the rule set, blast propagation, chain reactions, kill credit through chains, the suicide penalty, power-up application and kit loss on death, respawn tile selection, crate-regeneration exclusion rules, and round scoring. These are the tests that matter and they run headless in seconds.
+- **Unit tests** on `src/sim` — the rule set, blast propagation, chain reactions, kill credit through chains, the suicide penalty, power-up application and kit loss on death, respawn tile selection, crate-regeneration exclusion rules, and round scoring. These are the tests that matter and they run headless in seconds. They run on a small in-repo harness (`tests/test_case.gd` + `tests/run_tests.gd`) rather than GUT: the sim layer is pure GDScript with no Nodes, which is exactly the case a 100-line runner handles well, and vendoring a third-party addon to get assertion sugar is a poor trade. Decided in M1; see [the M1 brief §10](milestone-1-brief.md).
 - **Golden replay tests** — a stored seed + input log must produce a byte-identical end state. This catches accidental non-determinism the moment it is introduced, which is otherwise a nightmare to debug.
 - **Bot soak test** — four bots, 200 rounds, headless, assert no crashes, no player ever stuck unable to respawn, no crate sealing a player in, and a sane score distribution. Also our balance smoke signal.
 - **Manual hardware pass** per milestone on the reference Pi 400 and on Windows: four F310s through a powered hub, the three-pads-plus-built-in-keyboard configuration, hot-plug, and worst-case frame time.
-- CI (GitHub Actions): headless Godot runs unit + replay tests on every push; tagged commits produce Windows x86_64 and Linux arm64 artifacts.
+- CI (GitHub Actions): headless Godot runs unit + replay tests on every push; tagged commits produce Windows x86_64 and Linux arm32 artifacts.
 
 ## 9. Distribution
 
 - **Windows:** a zip containing `HenGrenade.exe` + `.pck`. No installer for 1.0.
-- **Raspberry Pi:** a `.tar.gz` with the arm64 binary, `.pck`, a `.desktop` entry, and an optional `install-kiosk.sh` that sets up autostart into the game on boot — a Pi 400's most likely job here is being a dedicated party box wired to a TV, and it has a keyboard attached for the setup, which makes kiosk mode safe to offer without stranding anyone.
+- **Raspberry Pi:** a `.tar.gz` with the arm32 binary, `.pck`, a `.desktop` entry, and an optional `install-kiosk.sh` that sets up autostart into the game on boot — a Pi 400's most likely job here is being a dedicated party box wired to a TV, and it has a keyboard attached for the setup, which makes kiosk mode safe to offer without stranding anyone.
 - Version stamped into the build and shown in the corner of the main menu, so bug reports are actionable.
 
 ## 10. What we are deliberately not building yet
@@ -231,3 +231,41 @@ Godot 4.4+ writes a `<script>.uid` beside every GDScript; these are stable resou
 
 Since Godot 4.0 there is **no** `Godot_v<x>_linux_headless.*.zip` release asset — the standard editor binary (`Godot_v<x>-stable_linux.x86_64.zip`) is run with `--headless` for import, tests, and exports. CI must download the `linux.x86_64.zip` asset (not a `_linux_headless` one, which 404s) and invoke it with `--headless`. The renamed binary is still called `godot_headless` in CI purely as a stable local path name.
 
+### A.11 Label drop shadows are a second text pass, and they cost draw calls
+
+Setting `font_shadow_color` on a `Label` makes Godot draw the text **twice**. On
+M1's seven-Label HUD that alone was **28 of 44 draw calls** — against a
+documented budget of 20 — while the entire 375-cell arena `TileMapLayer` cost
+**one**. Dropping the shadow from the five Labels that sit on the flat HUD
+margin (keeping it only on the clock and the round-end banner, which overlap
+busy pixels) took the whole frame to **16**. Rule for later milestones: a
+shadowed Label is a deliberate expense, not free polish, and the HUD is a more
+likely source of draw calls than the arena is.
+
+### A.12 Group `_draw` calls by primitive type, not by entity
+
+Godot's 2D renderer batches consecutive same-kind primitives. Drawing entity by
+entity — circle, circle, rect, circle, rect — breaks the batch every time.
+Drawing in passes (all flame rects, then all bomb circles, then all player
+rects) makes the cost proportional to the number of *passes* rather than the
+number of entities: M1's worst case, twenty-eight simultaneous radius-6 bombs
+with the arena almost entirely on fire, draws in **9 calls**, fewer than a quiet
+frame with the HUD up.
+
+### A.13 `_draw` runs under `--headless`, but a script error there does not fail the process
+
+Verified deliberately in M1 by putting a fault in a `_draw` and running the
+smoke check: the dummy display driver **does** call `_draw`, and the error is
+reported as `SCRIPT ERROR` on stderr — but the process still exits **0**. So a
+headless smoke check must grep stderr; relying on the exit code alone silently
+passes exactly the class of bug the check exists to find. The CI step does both.
+
+### A.14 Off-by-one is the default outcome for tick counters
+
+Two counters in the M1 sim were a tick short on the first attempt, in opposite
+ways, and both were caught by tests that asserted the exact tick rather than
+"eventually". A fuse of N means N ticks only if the detonation check runs
+**before** the decrement; a respawn delay of N means N ticks only if the counter
+always consumes a whole tick before it is read as expired. Neither is visible in
+play — 2.483 s and 2.5 s feel identical — which is precisely why they need
+tick-exact tests rather than eyeballing.

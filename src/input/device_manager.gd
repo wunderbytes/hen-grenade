@@ -63,6 +63,21 @@ func poll_all(tick: int) -> Array[InputFrame]:
 		frames[i] = slots[i].poll(tick)
 	return frames
 
+## Claims keyboard layouts until at least `count` slots are occupied.
+##
+## M1 has no lobby — press-A-to-join lands with it in M2 — so this is how a
+## freshly launched game becomes playable without a join screen. Anything
+## already bound takes precedence: plugged-in pads keep their slots and this
+## only fills what is left, so it never steals a seat from a real controller.
+func ensure_keyboard_slots(count: int) -> void:
+	for kb_index in range(_keyboard_sources.size()):
+		if occupied_count() >= count:
+			return
+		if _kb_claimed[kb_index]:
+			continue
+		if _claim_keyboard_slot(kb_index) < 0:
+			return      # no free slots left
+
 func slot_label(i: int) -> String:
 	if i < 0 or i >= slots.size():
 		return "?"

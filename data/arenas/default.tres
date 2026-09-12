@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ArenaDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/sim/arena_def.gd" id="1_arena"]
+
+[resource]
+script = ExtResource("1_arena")
+grid_w = 25
+grid_h = 15
+crate_permille = 700
+spawn_tiles = Array[Vector2i]([Vector2i(1, 1), Vector2i(23, 1), Vector2i(1, 13), Vector2i(23, 13)])
+respawn_tiles = Array[Vector2i]([Vector2i(1, 1), Vector2i(12, 1), Vector2i(23, 1), Vector2i(1, 7), Vector2i(12, 7), Vector2i(23, 7), Vector2i(1, 13), Vector2i(12, 13), Vector2i(23, 13)])

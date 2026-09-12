@@ -1,6 +1,8 @@
 # Milestone 0 — Completion Notes
 
-> Status: **code complete; hardware measurement deferred.** Every M0 deliverable that does not require the reference Pi 400 is implemented and headless-verified. The remaining items (the actual frame-time measurement and the four-controller input pass) are hardware-gated and documented in [m0-pi400.md](measurements/m0-pi400.md).
+> Status: **complete — M0 passed on hardware.** Every M0 deliverable is implemented and headless-verified, and on **2026-09-12** the exported **arm32** build was run on the reference Pi 400 and reported working with no frame-rate problem. ADR 0001 is not triggered; M1 is cleared. The only outstanding item is transcribing the actual overlay readings into [m0-pi400.md](../measurements/m0-pi400.md), which matters for the regression baseline rather than for the go/no-go.
+>
+> **Target architecture correction (2026-09-12):** the reference Pi 400 runs the **32-bit** Raspberry Pi OS, so the shipped Linux artifact is Godot's `arm32` export, not `arm64`. The arm64 preset has been dropped; docs, CI, and `tools/deploy-pi.sh` now reference `build/linux-arm32/HenGrenade.arm32` throughout.
 
 - **Date:** 2026-09-05
 - **Implementer:** agent on Windows 11, Godot 4.7.2 editor (project pins `4.7.2-stable`; see [ADR 0001](decisions/0001-engine-choice.md))
@@ -18,7 +20,7 @@
    - `PlayerSlot`.
 5. **Sandbox** (`src/dev/sandbox.*`) — real 25×15 `TileMapLayer` with pillar lattice, four coloured 16×16 squares driven by bound slots, wall collision, per-slot device labels; F2 → stress, F1 → title.
 6. **Main** (`src/app/main.*`) — bootstrap/router (auto-advances to sandbox after 1.2 s; F1 sandbox, F2 stress).
-7. **Exports & deploy** — `export_presets.cfg` (Windows x86_64, Linux arm64), `tools/deploy-pi.sh` (rsync + `--rendering-driver opengl3` launch).
+7. **Exports & deploy** — `export_presets.cfg` (Windows x86_64, Linux arm32), `tools/deploy-pi.sh` (rsync + `--rendering-driver opengl3` launch).
 8. **CI** (`.github/workflows/ci.yml`) — reads `.godot-version`, caches Godot by version, `--headless --import`, runs the test suite on every push, exports both artifacts on tags.
 9. **Tests** — minimal self-contained headless harness (`tests/run_tests.gd` via `--script`, `tests/test_case.gd`, `tests/unit/test_input_frame.gd`) pinning the `InputFrame` contract.
 10. **Measurement report** — `docs/measurements/m0-pi400.md` with the full protocol and exit-criteria table, ready to fill in on the Pi 400.
@@ -34,12 +36,9 @@
 - **Test harness:** a tiny self-contained `--script` runner is used instead of GUT. The brief explicitly permits this ("M0 has almost nothing to test; add a trivial passing test so the harness itself is proven working"). GUT should replace it in M1 when the simulation layer needs real coverage.
 - **`.uid` files are committed.** Godot 4.4+ writes a `<script>.uid` beside every GDScript; these are stable resource identifiers and are part of the repo. The brief's `.gitignore` list predates this and does not mention them. See [technical-design.md](technical-design.md) Appendix A.9.
 
-## Deferred (require physical hardware)
+## Hardware pass (2026-09-12)
 
-These are the hardware-gated M0 exit criteria and cannot be completed without the reference Pi 400 + four F310s:
-
-- The 720p / 1080p / 4K frame-time measurement on the Pi 400 (the actual go/no-go answer — the whole point of M0).
-- The four-F310s-via-powered-hub, three-pads-plus-built-in-keyboard, hot-plug, and identical-GUID disambiguation hardware pass.
-- Running the exported arm64 binary on the Pi (verifies no `No loader found for resource` errors).
-
-Everything needed to *produce* those answers is in place; only the physical run remains.
+- Exported **arm32** binary runs on the reference Pi 400, stress scene included, **no frame-rate problem observed** → the M0 go/no-go answer is **pass**.
+- Still to transcribe into [m0-pi400.md](../measurements/m0-pi400.md): the 720p / 1080p / 4K avg + p99 frame times and draw-call counts from the overlay, and the thermal readings. These are the regression baseline every later milestone appends to — worth doing even though the decision is already made.
+- Not yet reported on individually: the four-F310s-via-powered-hub, three-pads-plus-keyboard, hot-plug, and identical-GUID disambiguation checks. The input-layer rows of the measurement report are still blank.
+- The `No loader found for resource` check is only a **weak** pass so far: M0 ships no VRAM-compressed textures (the placeholder tileset is built at runtime), so nothing exercised it. The arm32 export preset now sets `texture_format/etc2_astc=true`, which is the half of that trap that lives outside project settings.

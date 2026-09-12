@@ -15,7 +15,7 @@ Everything needed to implement M0 without coming back to ask. Read [the roadmap]
 3. A **stress scene**: a deliberate, repeatable worst case for measurement.
 4. A **metrics overlay** good enough to make decisions from.
 5. The **input layer** — device discovery, slot binding, hot-plug, keyboard slots. This is the one subsystem built for keeps in M0.
-6. **Exports** for Windows x86_64 and Linux arm64, plus a deploy script for the Pi.
+6. **Exports** for Windows x86_64 and Linux arm32, plus a deploy script for the Pi.
 7. **CI** that runs headless and builds both artifacts.
 8. A **written measurement report** committed to the repo.
 
@@ -32,7 +32,7 @@ Bombs, blasts, crates as gameplay, power-ups, respawn, scoring, the round clock,
 | Engine | **Godot 4.7.2-stable**, standard (non-.NET) build |
 | Language | GDScript, statically typed |
 | Dev OS | Windows 11 x86_64 |
-| Target | Raspberry Pi 400, Raspberry Pi OS (Debian 13 trixie) arm64 |
+| Target | Raspberry Pi 400, Raspberry Pi OS **32-bit (armhf)** → Godot `arm32` export |
 | Test hardware | 1 × Pi 400, 4 × Logitech F310, 1 × powered USB hub, micro-HDMI cable, a TV or monitor |
 
 Pin the version in a `.godot-version` file at the repo root containing exactly `4.7.2-stable`. CI reads this file rather than hardcoding a version in the workflow, so upgrading is a one-line change.
@@ -82,7 +82,7 @@ Notes on the non-obvious ones:
 - **`stretch/mode="viewport"`** is the single most consequential setting in the file. See the technical design for why `canvas_items` would forfeit the entire Pi performance argument.
 - **`physics_jitter_fix=0.0`** — the default (0.5) lets Godot stretch physics steps to smooth rendering, which introduces variability into a loop that must be exactly 1/60 s. Turn it off now, before any simulation code exists.
 - **`max_physics_steps_per_frame=4`** bounds the catch-up spiral if a frame runs long: the game slows down rather than freezing.
-- **Both VRAM compression flags on** — without them, arm64 builds fail at load with `No loader found for resource`. This is the known Pi export trap; M0 is where we prove we have avoided it.
+- **Both VRAM compression flags on** — without them, ARM builds fail at load with `No loader found for resource`. This is the known Pi export trap; M0 is where we prove we have avoided it. Note the matching *export-preset* half of the trap: the Linux arm32 preset needs `texture_format/etc2_astc=true`, which Godot does not default to.
 
 ---
 
@@ -281,8 +281,8 @@ Write results to `docs/measurements/m0-pi400.md`: date, OS version, Godot versio
 | Three pads + built-in keyboard on the Pi | Four players, no hub |
 | Hot-plug | Unplug and replug a bound pad; it rebinds to the same slot |
 | Four identical pads | Correctly disambiguated despite matching GUIDs |
-| Exports | Windows x86_64 and Linux arm64 both run from CI artifacts |
-| arm64 texture loading | No `No loader found for resource` errors |
+| Exports | Windows x86_64 and Linux arm32 both run from CI artifacts |
+| arm32 texture loading | No `No loader found for resource` errors |
 
 **If the frame-time criterion fails**, stop and report before writing any gameplay. Bisect with the scene toggles first — if a single feature (particles, overdraw, HUD text) dominates, the budget may just need tightening. If the baseline itself is too slow, that is the ADR 0001 trigger and the answer is LÖVE, not optimisation heroics.
 
@@ -295,11 +295,11 @@ Commit `export_presets.cfg` with two presets:
 | Preset | Platform | Arch | Output |
 |---|---|---|---|
 | `Windows Desktop` | Windows Desktop | x86_64 | `build/windows/HenGrenade.exe` |
-| `Linux arm64` | Linux | arm64 | `build/linux-arm64/HenGrenade.arm64` |
+| `Linux arm32` | Linux | arm32 | `build/linux-arm32/HenGrenade.arm32` |
 
-Export templates for 4.7.2 must be installed; the official `.tpz` includes Linux arm64, so no cross-compilation toolchain is needed.
+Export templates for 4.7.2 must be installed; the official `.tpz` includes Linux arm32, so no cross-compilation toolchain is needed.
 
-`tools/deploy-pi.sh` — rsync the arm64 binary and `.pck` to the Pi, `chmod +x`, and optionally launch. Launch with `--rendering-driver opengl3` explicitly during M0 so there is no ambiguity about which renderer produced a number.
+`tools/deploy-pi.sh` — rsync the arm32 binary and `.pck` to the Pi, `chmod +x`, and optionally launch. Launch with `--rendering-driver opengl3` explicitly during M0 so there is no ambiguity about which renderer produced a number.
 
 ---
 
@@ -334,7 +334,7 @@ Ordered so that the risky, project-defining answers arrive as early as possible.
 
 1. Repo skeleton, `.godot-version`, `.gitignore`, project settings, constants. *(Nothing runs yet.)*
 2. Metrics overlay. Build it first — you want measurements from the very first thing you put on screen.
-3. Stress scene with placeholder rectangles. **Export to arm64 and run it on the Pi 400 now.** This is the moment of truth and there is no reason to delay it behind input work.
+3. Stress scene with placeholder rectangles. **Export to arm32 and run it on the Pi 400 now.** This is the moment of truth and there is no reason to delay it behind input work.
 4. Run the full measurement protocol, write `docs/measurements/m0-pi400.md`. **Decision point:** continue, or trigger the ADR.
 5. `InputFrame`, `InputSource`, `GamepadSource`, `KeyboardSource`.
 6. `DeviceManager` with hot-plug and GUID binding.

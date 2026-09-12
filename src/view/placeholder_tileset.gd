@@ -1,7 +1,12 @@
 class_name PlaceholderTileset
-## Builds a TileSet from solid-colour cells generated at runtime, so the dev
-## scenes have a real TileMapLayer with no binary assets committed.
-## Throwaway: lives under src/dev/ and is not part of the production build.
+## Builds a TileSet from solid-colour cells generated at runtime, so the game
+## has a real TileMapLayer with no binary assets committed.
+##
+## Written for the M0 dev scenes and promoted to src/view/ in M1: it is now the
+## arena's actual tileset, and it stays that way until M4 replaces it with real
+## pixel art. Generating the atlas at runtime also keeps M1 free of any
+## VRAM-compressed texture, which is why the arm32 export trap has not bitten
+## yet (see docs/measurements/m0-pi400.md).
 
 ## Returns a TileSet whose atlas tiles are the given solid colours, one tile per
 ## colour, each TILE_PX x TILE_PX. Tile atlasses are laid out horizontally.

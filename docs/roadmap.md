@@ -15,7 +15,7 @@ Each milestone ends in something runnable on **both** targets. Estimates assume 
 - Godot 4.7.2 pinned in `.godot-version`; empty project with the repo layout from the technical design.
 - A throwaway scene at the real 640 × 360 base resolution with the full 25 × 15 tilemap, four coloured squares moving around it, and a frame-time overlay.
 - **A deliberate worst-case stress scene**, not a hello-world: every crate on screen, a large chain reaction, four squares moving, a regeneration wave landing. Whatever the Pi 400 does here is the honest number.
-- **Export to Windows x86_64 and Linux arm64 and run both**, with the Pi 400 as the reference machine.
+- **Export to Windows x86_64 and Linux arm32 and run both**, with the Pi 400 as the reference machine.
 - **Measure the stress scene at 720p, 1080p and 4K output** to find out how much the final upscale blit actually costs on this GPU, and confirm the borderless-720p-window default behaves. Cheap check now, expensive surprise later.
 - **Four Logitech F310s connected at once**, on Windows and on the Pi 400 through a powered hub, all four squares moving independently; unplug and replug one.
 - **The three-pads-plus-built-in-keyboard configuration**, which is the only four-player setup a stock Pi 400 supports without extra hardware.
@@ -34,7 +34,7 @@ The rule set, headless and tested, with programmer-art rendering on top.
 - Bombs: placement, own-bomb pass-off, fuse, plus-shaped blast, hard block and crate interaction, chain reactions, death.
 - Flame ownership through chains, kill credit, and the suicide penalty.
 - The 2:00 integer round clock, death → respawn cycle, respawn tile selection, spawn protection.
-- GUT unit tests covering blast propagation, chain reactions, and kill credit; replay record + playback harness.
+- Unit tests covering blast propagation, chain reactions, and kill credit; replay record + playback harness.
 
 **Exit criteria:** two keyboard players can play a complete, correct two-minute round with respawns and a score; the sim test suite is green headless in CI.
 
@@ -120,5 +120,5 @@ Online multiplayer (the architecture is ready for lockstep or rollback), team ba
 | Art production stalls the project | Medium | Programmer art through M3; theme and art sourcing strategy both settled before M4 starts; the game must be fun before it is pretty |
 | Theme stays undecided past M3 and blocks M4 | Medium | Treated as an explicit M4 entry gate rather than a background question; mechanics are written theme-free so the decision stays cheap right up to that point |
 | Game is balanced but not fun | Medium | M3 exits on a real four-player playtest, early enough to change direction cheaply |
-| Godot arm64 export gotchas (texture import formats) | Low | Known issue, settings documented in the technical design, exercised in M0 CI |
+| Godot arm32 export gotchas (texture import formats) | Low | Known issue, settings documented in the technical design, exercised in M0 CI |
 | Scope creep toward online play | Low | Explicit non-goal; architecture already leaves the door open, so there is no cost to saying "later" |

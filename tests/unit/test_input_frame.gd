@@ -11,6 +11,7 @@ func test_constants_sanity() -> void:
 	assert_eq(C.ARENA_ORIGIN, Vector2i(70, 30), "arena origin")
 	assert_eq(C.TICK_HZ, 60, "tick hz")
 	assert_eq(C.UNITS_PER_TILE, 256, "units per tile")
+	assert_eq(C.HALF_TILE, 128, "half tile")
 	assert_eq(C.MAX_PLAYERS, 4, "max players")
 
 func test_input_frame_default() -> void:

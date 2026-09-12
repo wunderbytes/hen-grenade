@@ -39,7 +39,7 @@ func _ready() -> void:
 
 func _add_hint() -> void:
 	var lbl: Label = Label.new()
-	lbl.text = "SANDBOX  [F2 stress]  [F1 title]"
+	lbl.text = "SANDBOX  [F1 title]  [F2 stress]  [F4 match]"
 	lbl.position = Vector2(4, 4)
 	lbl.add_theme_font_size_override("font_size", 8)
 	lbl.add_theme_color_override("font_color", Color(0.7, 0.85, 0.7))
@@ -87,8 +87,9 @@ func _physics_process(_delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
-			KEY_F2: get_tree().change_scene_to_file("res://src/dev/stress.tscn")
 			KEY_F1: get_tree().change_scene_to_file("res://src/app/main.tscn")
+			KEY_F2: get_tree().change_scene_to_file("res://src/dev/stress.tscn")
+			KEY_F4: get_tree().change_scene_to_file("res://src/app/match_scene.tscn")
 
 func _step_square(i: int, frame: InputFrame, delta: float) -> void:
 	var sq: Dictionary = _squares[i]

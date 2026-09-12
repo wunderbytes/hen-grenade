@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="Balance" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/sim/balance.gd" id="1_balance"]
+
+[resource]
+script = ExtResource("1_balance")
+move_speed_units = 15
+max_speed_units = 26
+corner_assist_units = 77
+bomb_fuse_ticks = 150
+flame_ticks = 24
+start_blast_radius = 1
+start_bomb_capacity = 1
+round_ticks = 7200
+respawn_ticks = 90
+spawn_protect_ticks = 120

@@ -1,0 +1,18 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/app/match_scene.gd" id="1_match"]
+[ext_resource type="Script" path="res://src/view/arena_view.gd" id="2_arena"]
+[ext_resource type="Script" path="res://src/view/entity_view.gd" id="3_entities"]
+[ext_resource type="Script" path="res://src/view/hud_view.gd" id="4_hud"]
+
+[node name="MatchScene" type="Node2D"]
+script = ExtResource("1_match")
+
+[node name="ArenaLayer" type="TileMapLayer" parent="."]
+script = ExtResource("2_arena")
+
+[node name="Entities" type="Node2D" parent="."]
+script = ExtResource("3_entities")
+
+[node name="Hud" type="Node2D" parent="."]
+script = ExtResource("4_hud")

@@ -61,7 +61,7 @@ Arena dimensions live in a data file, not in code, so this is cheap to change af
 - A bomb is dropped on the tile the player's centre occupies and is **solid to everyone except the player still standing on it** — you may step off your own bomb, but not back onto it.
 - **Chain reaction:** a bomb caught in a blast detonates on the same tick.
 - The blast is a plus-shape from the bomb's tile: it extends up to `radius` tiles in each direction, **stops at hard blocks**, and **destroys exactly one crate** before stopping in that direction. Flames persist **0.4 s (tune)** and kill any player whose centre tile they occupy.
-- Every flame tile remembers **which player's bomb produced it**, including through chains. That owner gets the kill credit.
+- Every flame tile remembers **who owns it**, and that owner gets the kill credit. Through a chain, ownership belongs to **whoever started the chain**, not to the owner of each bomb it sets off: detonate someone else's bomb and the kills are yours, and having your own bomb used against you is not counted as your suicide. *(Clarified in M1; this sentence and technical design §3 previously disagreed about chains.)*
 
 ### 5.3 Death, respawn, and scoring
 

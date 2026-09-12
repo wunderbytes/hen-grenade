@@ -53,6 +53,27 @@ jobs:
           ${{ runner.temp }}/godot/godot_headless --headless --script res://tests/run_tests.gd
         timeout-minutes: 5
 
+      # `--import` registers class names but does not fully compile
+      # scene-attached scripts, so it cannot catch a type error inside a scene
+      # (see docs/technical-design.md Appendix A.1). This boots the real main
+      # scene with a user argument — the only way to run scenes with autoloads
+      # present (A.2, A.3) — and steps physics frames on each one.
+      #
+      # A GDScript runtime error inside _process or _draw prints SCRIPT ERROR
+      # but does *not* set a non-zero exit code, so the stderr check below is
+      # load-bearing rather than belt-and-braces. Verified: it catches a
+      # deliberate fault in a _draw.
+      - name: Scene smoke
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          set -o pipefail
+          ${{ runner.temp }}/godot/godot_headless --headless -- --smoke 2>&1 | tee smoke.log
+          if grep -qE 'SCRIPT ERROR|Parse Error|Cannot call method' smoke.log; then
+            echo "::error::scene smoke produced script errors"
+            exit 1
+          fi
+        timeout-minutes: 5
+
   export:
     name: Export artifacts
     runs-on: ubuntu-latest
@@ -103,7 +124,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Create build directories
-        run: mkdir -p build/windows build/linux-arm64
+        run: mkdir -p build/windows build/linux-arm32
 
       - name: Export Windows x86_64
         run: |
@@ -111,10 +132,10 @@ jobs:
           ${{ runner.temp }}/godot/godot_headless --headless --export-release "Windows Desktop" --quit
         timeout-minutes: 15
 
-      - name: Export Linux arm64
+      - name: Export Linux arm32
         run: |
           cd "$GITHUB_WORKSPACE"
-          ${{ runner.temp }}/godot/godot_headless --headless --export-release "Linux arm64" --quit
+          ${{ runner.temp }}/godot/godot_headless --headless --export-release "Linux arm32" --quit
         timeout-minutes: 15
 
       - name: Upload artifacts
@@ -123,7 +144,7 @@ jobs:
           name: hen-grenade-builds
           path: |
             build/windows/
-            build/linux-arm64/
+            build/linux-arm32/
 
       - name: Attach artifacts to release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -132,5 +153,6 @@ jobs:
           files: |
             build/windows/HenGrenade.exe
             build/windows/HenGrenade.pck
-            build/linux-arm64/HenGrenade.arm64
-            build/linux-arm64/HenGrenade.pck
+            build/linux-arm32/HenGrenade.arm32
+            build/linux-arm32/HenGrenade.pck
+            build/linux-arm32/HenGrenade.sh

@@ -8,7 +8,7 @@
 We are building a Bomberman-style local-multiplayer game that must run on:
 
 - **Windows** (x86_64) — also the primary development machine.
-- **Raspberry Pi 400** (arm64, BCM2711, VideoCore VI @ 500 MHz, 4 GB) — the "couch console" target, and the exact hardware we design against.
+- **Raspberry Pi 400** (BCM2711, VideoCore VI @ 500 MHz, 4 GB), running the **32-bit** Raspberry Pi OS — the "couch console" target, and the exact hardware we design against. The shipped Linux binary is therefore Godot's `arm32` export.
 
 Hard requirements that drive the decision:
 
@@ -21,7 +21,7 @@ Hard requirements that drive the decision:
 
 | Option | Pi story | Gamepads | 2D tooling | Risk |
 |---|---|---|---|---|
-| **Godot 4.7 (GDScript)** | Official Linux **arm64** export templates; Pi 5 reported running 4.7.x well; Compatibility (GLES3) renderer for export | SDL-backed, `gamecontrollerdb` built in, hot-plug events, per-device indices | Excellent: scenes, TileMapLayer, animation, UI, audio, particles | **Pi 400 GPU headroom — the real risk, see below**; engine is heavier than needed |
+| **Godot 4.7 (GDScript)** | Official Linux **arm32 and arm64** export templates; Pi 5 reported running 4.7.x well; Compatibility (GLES3) renderer for export | SDL-backed, `gamecontrollerdb` built in, hot-plug events, per-device indices | Excellent: scenes, TileMapLayer, animation, UI, audio, particles | **Pi 400 GPU headroom — the real risk, see below**; engine is heavier than needed |
 | **LÖVE (Lua) 11.5** | Runs great on Pi, `apt install love`, tiny footprint | SDL2 `love.joystick` / gamepad API, very solid | Code-only, no editor; UI/menus hand-rolled | 12.0 still unreleased after years; we'd write a lot of framework ourselves |
 | **Python + pygame-ce** | Runs on Pi | SDL2-backed, fine | Code-only | Slowest runtime; Python packaging for two OSes is a chore |
 | **C++/SDL3 or Rust/Bevy** | SDL3 fine; Bevy/wgpu wants Vulkan, weak on Pi | Best-in-class (SDL3) / good | Nothing pre-built | Highest effort by a wide margin; Bevy on Pi is a research project |
@@ -33,7 +33,7 @@ Hard requirements that drive the decision:
 
 Reasons, in priority order:
 
-1. **It is the only option that ships official arm64 Linux export templates alongside Windows x86_64 from a single project.** One export dialog, two artifacts, no cross-compilation toolchain of our own.
+1. **It is the only option that ships official ARM Linux export templates — arm32 *and* arm64 — alongside Windows x86_64 from a single project.** One export dialog, two artifacts, no cross-compilation toolchain of our own. We ship the `arm32` one, because the reference Pi 400 runs the 32-bit Raspberry Pi OS.
 2. **Controller support is the feature we cannot afford to get wrong**, and Godot wraps SDL's gamepad layer including the community mapping database, device hot-plug signals (`Input.joy_connection_changed`), and stable per-device IDs. Everything we need for "press A to join" lobbies exists out of the box — including treating the Pi 400's built-in keyboard as just another joinable player slot, which matters because the machine only has three USB ports.
 3. **A tile-grid 2D game rendered at 640 × 360 should sit well below the Pi 400's ceiling in the Compatibility renderer** — but this is the weakest leg of the decision and it is worth being precise about why. The positive reports of Godot 4.7 running well on Raspberry Pi hardware are **Pi 5 reports, and they do not transfer**: the Pi 400 has a VideoCore VI at 500 MHz against the Pi 5's VideoCore VII at 910 MHz, so we are designing for roughly half the GPU that evidence was gathered on. Meanwhile the public reports from Pi 4-family boards (same GPU as ours) include a simple Godot 4 tilemap platformer at 2–5 FPS; in that case the dominant cost was `PointLight2D`, and removing the 2D lights alone took it to 20 FPS.
 
@@ -44,8 +44,8 @@ Reasons, in priority order:
 Notes attached to the decision:
 
 - Pin the exact patch version (**4.7.2-stable**, released 2026-08-18) in `.godot-version` and CI. Do not float.
-- **The editor never has to run on the Pi 400.** Develop and export on Windows/desktop Linux; the Pi only ever receives an exported arm64 binary plus `.pck`. This matters more with a Pi 400 than it would with a Pi 5 — the editor on 4 GB and a VideoCore VI would be a miserable way to work, and we never have to find out.
-- Use the **Compatibility** renderer for the shipped build. Vulkan on VideoCore is immature and Forward+ falls back to Mobile on this GPU anyway. (If in-editor performance on an arm64 dev box is ever a problem, Mobile is better *there* — but ship Compatibility.)
+- **The editor never has to run on the Pi 400.** Develop and export on Windows/desktop Linux; the Pi only ever receives an exported arm32 binary plus `.pck`. This matters more with a Pi 400 than it would with a Pi 5 — the editor on 4 GB and a VideoCore VI would be a miserable way to work, and we never have to find out.
+- Use the **Compatibility** renderer for the shipped build. Vulkan on VideoCore is immature and Forward+ falls back to Mobile on this GPU anyway. (If in-editor performance on an ARM dev box is ever a problem, Mobile is better *there* — but ship Compatibility.)
 - Enable both `Import S3TC BPTC` and `Import ETC2 ASTC` in project rendering settings so exported textures load on both desktop GL and GLES targets. This is a known footgun when exporting to Pi.
 - Godot's own physics engine is **not** used for gameplay (see `docs/technical-design.md`); we run a custom deterministic grid simulation. This decision is about tooling, platform reach, and input — not about using the engine's simulation.
 

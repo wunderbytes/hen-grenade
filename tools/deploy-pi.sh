@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tools/deploy-pi.sh — rsync the arm64 export to the Pi 400 and optionally launch.
+# tools/deploy-pi.sh — rsync the arm32 export to the Pi 400 and optionally launch.
 # See docs/milestone-0-brief.md §8.
 #
 # Usage:
@@ -20,12 +20,12 @@ if [ "${2:-}" = "--launch" ]; then
 	LAUNCH=1
 fi
 
-BIN="build/linux-arm64/HenGrenade.arm64"
-PCK="build/linux-arm64/HenGrenade.pck"
+BIN="build/linux-arm32/HenGrenade.arm32"
+PCK="build/linux-arm32/HenGrenade.pck"
 REMOTE_DIR="/home/${PI_TARGET%%@*}/hen-grenade"
 
 if [ ! -f "$BIN" ]; then
-	echo "error: $BIN not found. Export the 'Linux arm64' preset first." >&2
+	echo "error: $BIN not found. Export the 'Linux arm32' preset first." >&2
 	exit 1
 fi
 

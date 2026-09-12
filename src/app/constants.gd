@@ -24,6 +24,9 @@ const TICK_HZ: int = 60
 ## Speeds are stored as integer units-per-tick, not tiles-per-second.
 ## The design's 3.5 t/s becomes 3.5 * 256 / 60 ~= 14.93 -> 15 units/tick (3.516 t/s).
 const UNITS_PER_TILE: int = 256
+## Half a tile, in sub-tile units. The offset from a tile's top-left corner to
+## its centre, and the distance from a centre to a tile boundary.
+const HALF_TILE: int = UNITS_PER_TILE / 2
 const MAX_PLAYERS: int = 4
 
 # --- Player colours (programmer art) -----------------------------------------

@@ -266,8 +266,10 @@ func _input(event: InputEvent) -> void:
 			KEY_E: _toggle_explosions()
 			KEY_H: _toggle_hud()
 			KEY_R: _cycle_resolution()
-			KEY_F1: get_tree().change_scene_to_file("res://src/dev/sandbox.tscn")
+			KEY_F1: get_tree().change_scene_to_file("res://src/app/main.tscn")
 			KEY_F2: pass  # already here
+			KEY_F3: get_tree().change_scene_to_file("res://src/dev/sandbox.tscn")
+			KEY_F4: get_tree().change_scene_to_file("res://src/app/match_scene.tscn")
 
 func _toggle_vsync() -> void:
 	var mode: int = DisplayServer.window_get_vsync_mode()
