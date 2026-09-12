@@ -28,6 +28,9 @@ const UNITS_PER_TILE: int = 256
 ## its centre, and the distance from a centre to a tile boundary.
 const HALF_TILE: int = UNITS_PER_TILE / 2
 const MAX_PLAYERS: int = 4
+## Fewest occupied slots the lobby will start a round with. The design is a
+## 2-4 player game (game design §7); a one-player round has nothing in it.
+const MIN_PLAYERS: int = 2
 
 # --- Player colours (programmer art) -----------------------------------------
 const PLAYER_COLORS: Array[Color] = [

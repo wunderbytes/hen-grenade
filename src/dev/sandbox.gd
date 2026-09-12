@@ -16,6 +16,10 @@ var _squares: Array[Dictionary] = []
 var _legend: Label
 
 func _ready() -> void:
+	# Pressing A and watching a square move is the entire point of this scene, so
+	# it runs with joining live, exactly like the lobby. Joining is off by default
+	# now that a lobby owns it (see docs/milestone-2-brief.md §3.3).
+	DeviceManager.enter_lobby()
 	_grid = get_node("GridLayer")
 	_grid.tile_set = PlaceholderTileset.build([
 		Color8(40, 44, 52),    # floor  (dark)
@@ -39,7 +43,7 @@ func _ready() -> void:
 
 func _add_hint() -> void:
 	var lbl: Label = Label.new()
-	lbl.text = "SANDBOX  [F1 title]  [F2 stress]  [F4 match]"
+	lbl.text = "SANDBOX  press A / SPACE / RIGHT CTRL to join  [F1 title]  [F2 stress]  [F4 match]"
 	lbl.position = Vector2(4, 4)
 	lbl.add_theme_font_size_override("font_size", 8)
 	lbl.add_theme_color_override("font_color", Color(0.7, 0.85, 0.7))

@@ -86,11 +86,16 @@ This is the highest-risk subsystem for our targets, so it gets a dedicated layer
 **Discovery and binding**
 - Godot's joypad layer sits on SDL, including the community controller mapping database, so an F310 reports as a standard gamepad on both Windows (XInput) and Linux (`xpad`) with no per-device code from us.
 - Players bind in the lobby by **pressing A on the pad they want** (`joy_connection_changed` + first-press capture). A device is bound to exactly one player slot; a slot may also be a keyboard layout or a bot.
-- Hot-plug: unplugging a bound pad **pauses the match** and shows "Player 2, reconnect your controller". Rebinding on reconnect matches by device GUID first, then falls back to press-to-claim.
+- The rule players learn is uniform across devices: **join with your bomb button, leave with your action button** — A / B on a pad, `Space` / `Q` on the WASD seat, `Right Ctrl` / `/` on the arrows seat. Leaving is live only in the lobby, because B is the action button in a round.
+- **Joining is gated on the lobby.** A pad pressing A mid-round must not take a seat: `MatchState`'s active-slot list is frozen when the round starts, so a late joiner would get a HUD card and no body. Reconnecting a *reserved* seat is allowed regardless — a reconnect is not a join.
+- Hot-plug has **two policies, one mechanism** (decided in M2). A bound pad that disappears **in the lobby** has its seat freed: nobody is mid-round and a pad on the floor is just a pad on the floor. A bound pad that disappears **in a match** has its seat reserved and **pauses the round**, showing "Player 2 — plug it back in". `BACK` from that notice quits to the lobby, because a party game that can be soft-locked by a loose USB plug is worse than one with no hot-plug handling at all.
+- Rebinding on reconnect matches by device **GUID** first and only when that is unambiguous. Two seats waiting on the same GUID is what four identical F310s produce, and there is no way to tell them apart, so the notice asks for a press and the seats are claimed in slot order. Matching on Godot's device *index* would be wrong: that index is a slot in the engine's own table and gets reused, so a stale index can hand one player's seat to a different controller.
+- **Slot assignment is a pure, tested layer.** All of the above lives in `DeviceBinder` — no `Node`, no autoload, no `Input` — with `DeviceManager` reduced to the hardware adapter around it. That inversion exists because the autoload is unreachable from a `--script` test process (Appendix A.2), so as long as the decisions lived inside it they could not be tested at all.
 
 **Reading**
 - The D-pad is the primary input; the left stick is converted to four directions with a **0.5 magnitude threshold and hysteresis at 0.35** so diagonal jitter cannot cause corridor stutter.
 - Buttons: A = drop bomb, B = detonate (Remote) / toss (Toss), Start = pause, Back = leave.
+- **Menu buttons are a separate layer from gameplay input.** Start, Back, Y and X never enter `InputFrame`: that struct is the replay format and what bots emit, and a pause the simulation could observe would be a determinism bug waiting to happen. Menus also read *hardware* rather than slots, so any connected pad can confirm a rematch, including one that never joined — the opposite of gameplay input, where an unbound device can do nothing at all. All of it is edge-detected once per physics frame in `DeviceManager`, which as an autoload always runs before the current scene, so no two menus can disagree about what a press means.
 - Keyboard support for two players on one board (WASD + Space, Arrows + Right Ctrl). On a Pi 400 this is **not a fallback** — see below — so it gets the same care as gamepad input, not debug-quality treatment. It is also how automated tests and solo debugging work.
 
 **Logitech F310 specifics** (documented so the setup guide is right the first time)
@@ -169,7 +174,7 @@ hen-grenade/
 
 ## 8. Testing strategy
 
-- **Unit tests** on `src/sim` — the rule set, blast propagation, chain reactions, kill credit through chains, the suicide penalty, power-up application and kit loss on death, respawn tile selection, crate-regeneration exclusion rules, and round scoring. These are the tests that matter and they run headless in seconds. They run on a small in-repo harness (`tests/test_case.gd` + `tests/run_tests.gd`) rather than GUT: the sim layer is pure GDScript with no Nodes, which is exactly the case a 100-line runner handles well, and vendoring a third-party addon to get assertion sugar is a poor trade. Decided in M1; see [the M1 brief §10](milestone-1-brief.md).
+- **Unit tests** on `src/sim` **and on the pure parts of `src/input` and `src/ui`** — the rule set, blast propagation, chain reactions, kill credit through chains, the suicide penalty, power-up application and kit loss on death, respawn tile selection, crate-regeneration exclusion rules, round scoring, and (from M2) slot assignment: joins, leaves, bots, GUID reconnects and the identical-pad case. The line is not "input is untestable" — it is `Input` and `Node` that cannot be reached from a `--script` process, so the logic that matters is kept out of both. These are the tests that matter and they run headless in seconds. They run on a small in-repo harness (`tests/test_case.gd` + `tests/run_tests.gd`) rather than GUT: the sim layer is pure GDScript with no Nodes, which is exactly the case a 100-line runner handles well, and vendoring a third-party addon to get assertion sugar is a poor trade. Decided in M1; see [the M1 brief §10](milestone-1-brief.md).
 - **Golden replay tests** — a stored seed + input log must produce a byte-identical end state. This catches accidental non-determinism the moment it is introduced, which is otherwise a nightmare to debug.
 - **Bot soak test** — four bots, 200 rounds, headless, assert no crashes, no player ever stuck unable to respawn, no crate sealing a player in, and a sane score distribution. Also our balance smoke signal.
 - **Manual hardware pass** per milestone on the reference Pi 400 and on Windows: four F310s through a powered hub, the three-pads-plus-built-in-keyboard configuration, hot-plug, and worst-case frame time.
@@ -269,3 +274,32 @@ ways, and both were caught by tests that asserted the exact tick rather than
 always consumes a whole tick before it is read as expired. Neither is visible in
 play — 2.483 s and 2.5 s feel identical — which is precisely why they need
 tick-exact tests rather than eyeballing.
+
+### A.15 A scene whose root script fails to parse still instantiates
+
+`PackedScene.instantiate()` on a scene whose script has a **parse error** returns
+a perfectly good node with **nothing attached to it**. It does not return `null`
+and it does not fail. M2 hit exactly this — a five-argument call to a
+four-argument helper in the lobby script — and the scene smoke printed `OK` for
+it and exited **0**. The only thing failing the job was the `SCRIPT ERROR` grep
+in CI, which was doing all the work while the exit code lied.
+
+Combined with A.13 (a script error in `_draw` does not fail the process either),
+the rule is: **a headless check must assert something about what it built, not
+merely that building did not throw.** The smoke step now fails any scene whose
+root comes back with `get_script() == null`.
+
+### A.16 `queue_redraw()` needs two process frames, not one
+
+A scripted check that wants to *see* something drawn — an overlay, a menu — must
+`await get_tree().process_frame` **twice** after calling the code that requests
+the redraw. The request is serviced at the end of the frame already in progress,
+so a single await can slip past it and the draw never happens. Found by
+capturing the smoke run with `--write-movie`: the pause menu was absent from
+every captured frame while the reconnect notice, one step later in the same
+loop, was present.
+
+Which is the other lesson here: **`--write-movie <file>.png` is a usable
+screenshot mechanism for verifying UI**. Godot writes one PNG per rendered frame
+with `--fixed-fps`, so pointing it at an existing scripted run costs nothing and
+turns "the layout is probably fine" into a picture.

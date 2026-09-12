@@ -2,29 +2,40 @@
 
 A local-multiplayer, Bomberman-style arena battler for **Windows** and **Raspberry Pi**, built for four people on one couch with four gamepads.
 
-> **Status: Milestone 1 complete.** The hardware spike passed on a real Pi 400 (M0) and the rule set now exists, is unit-tested headless, and is playable with two keyboard players on programmer art (M1). Power-ups, the lobby, bots and real art are still ahead — see the [roadmap](docs/roadmap.md).
+> **Status: Milestone 2 code complete, hardware pass owed.** The hardware spike passed on a real Pi 400 (M0), the rule set exists and is unit-tested headless (M1), and there is now a lobby, four-player joining, hot-plug handling, a pause menu and a rematch flow (M2). Power-ups, bots and real art are still ahead — see the [roadmap](docs/roadmap.md).
 
 ## Playing it
 
 Open the project in **Godot 4.7.2** and press play, or run an exported build. The
-game starts itself after a title beat.
+title card is a beat; it drops you into the lobby.
 
-| | Move | Bomb |
-|---|---|---|
-| **Player 1** | `W` `A` `S` `D` | `Space` |
-| **Player 2** | arrow keys | `Right Ctrl` |
+**In the lobby, join with your bomb button and leave with your action button.**
+Two players minimum, four maximum, any mix of humans and (placeholder) bots.
 
-Gamepads join by pressing **A**; if none are connected the two keyboard layouts
-are claimed automatically, because the lobby does not exist until M2. `F1` title,
-`F2` stress benchmark, `F3` input sandbox, `F4` match, `F5` metrics overlay, `R`
-to replay a finished round.
+| | Move | Join / bomb | Leave / action |
+|---|---|---|---|
+| **Gamepad** | D-pad or left stick | `A` | `B` |
+| **Keyboard seat 1** | `W` `A` `S` `D` | `Space` | `Q` |
+| **Keyboard seat 2** | arrow keys | `Right Ctrl` | `/` |
+
+`Y` / `X` add and drop a bot (`B` / `N` on the keyboard), and **`START` on a pad
+or `Enter` on the keyboard begins the round**. So the shortest keyboard-only
+route from launch to playing is `Space`, `Right Ctrl`, `Enter`.
+
+In a round, `START` or `Esc` pauses — resume, restart, or quit to the lobby —
+and unplugging a controller pauses the game until it comes back. At the final
+whistle, `A` / `Enter` rematches with the same players and `B` / `Backspace`
+returns to the lobby.
+
+Development routes: `F1` title, `F2` stress benchmark, `F3` input sandbox, `F4`
+straight into a round with a stand-in roster, `F5` metrics overlay.
 
 Every round is recorded to `user://replays/` as a seed plus an input log — about
 29 KB for a full two-minute round, which is what makes "attach the replay to the
 bug report" practical.
 
 ```bash
-# Run the sim test suite headless (10 suites, 104 tests)
+# Run the test suite headless (12 suites, 141 tests)
 godot --headless --script res://tests/run_tests.gd
 
 # Load and step every scene, the way CI does
@@ -52,8 +63,10 @@ The tone is light and playful, but **the theme and the final title are deliberat
 | [Roadmap](docs/roadmap.md) | Milestones M0–M6, exit criteria, and the risk register |
 | [Milestone 0 build brief](docs/milestone-0-brief.md) | The executable spec for the first milestone: project settings, skeleton architecture, input contracts, the benchmark scene, and the measurement protocol |
 | [Milestone 1 build brief](docs/milestone-1-brief.md) | The executable spec for the simulation layer: the determinism contract, arena generation, movement, blasts and chains, respawn, replays, and the test plan |
+| [Milestone 2 build brief](docs/milestone-2-brief.md) | The executable spec for players and controllers: the slot model, join and menu input, the two hot-plug policies, the lobby, and the round lifecycle |
 | [M0 completion notes](docs/progress/m0-completion.md) | What was implemented for M0 and the hardware pass result |
 | [M1 completion notes](docs/progress/m1-completion.md) | What was implemented for M1, what was verified, the rule decisions taken, and what is still owed |
+| [M2 completion notes](docs/progress/m2-completion.md) | What was implemented for M2, the input decisions taken, and the hardware checks still owed |
 | [Pi 400 measurements](docs/measurements/m0-pi400.md) | The performance protocol and the running record every milestone appends to |
 | [ADR 0001 — Engine choice](docs/decisions/0001-engine-choice.md) | Why Godot 4.7 over LÖVE, pygame, SDL, and Bevy |
 
@@ -63,4 +76,5 @@ The tone is light and playful, but **the theme and the final title are deliberat
 - **A 25 × 15 arena at a 640 × 360 internal resolution**, integer-scaled ×2 to 720p and ×3 to 1080p, with the HUD in the side margins — the whole playfield on screen at once, filling a 16:9 display.
 - **Gameplay runs in a pure, deterministic 60 Hz simulation** outside the scene tree, with rendering as a read-only view on top. That makes the rules unit-testable headless, gives us replays for bug reports and regression tests, makes bots and humans interchangeable, and leaves online play possible later without a rewrite.
 - **Milestone 0 was a hardware spike, not a feature.** Four F310s and 60 FPS on a real Pi 400 — measured on a deliberate worst-case scene, not a hello-world — were proven before a single gameplay rule was written. The Pi 400's GPU is the biggest risk in the project, so it got tested first, and the engine choice was written to be reversible at exactly that point. It passed; Godot stays.
+- **Milestone 2 is about the ten seconds before the game starts**, which is where a couch game is won or lost: you press A on the pad in your hand and you are in. The interesting engineering is not the lobby, it is the roster layer under it — joins, leaves, GUID reconnects and the four-identical-controllers case all live in a pure class with no `Node` and no `Input` in sight, so the flakiest logic in the project finally has a test suite instead of a hardware anecdote.
 - **Milestone 1 is the rule set, and it is testable rather than watchable.** Bombs, chains, kill credit, respawn and the round clock all live in `src/sim/` as a pure function of state and input, covered by 104 headless tests and a golden replay that must reproduce a committed state fingerprint. The programmer-art rendering on top is the last thing built, deliberately: if the rules are wrong, watching squares move around will not tell you.

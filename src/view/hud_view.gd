@@ -42,7 +42,7 @@ func _ready() -> void:
 	_banner = _make_label(Vector2(C.VIEW_W / 2.0 - 120, C.VIEW_H / 2.0 - 20), BANNER_FONT_SIZE, Color(1, 1, 1), true)
 	_banner.visible = false
 	_hint = _make_label(Vector2(4, C.VIEW_H - 12), FONT_SIZE, Color(0.55, 0.62, 0.55), false)
-	_hint.text = "F1 title  F2 stress  F3 sandbox  F5 metrics"
+	_hint.text = "ESC pause  F1 title  F3 sandbox  F5 metrics"
 
 func sync(state: MatchState) -> void:
 	_clock.text = _format_clock(state.seconds_left())
@@ -70,10 +70,10 @@ func sync(state: MatchState) -> void:
 func show_result(state: MatchState) -> void:
 	var winner: int = state.winner()
 	if winner < 0:
-		_banner.text = "     DRAW\n\n  R to play again"
+		_banner.text = "     DRAW\n\n A rematch  ·  B lobby"
 		_banner.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
 	else:
-		_banner.text = "  PLAYER %d WINS\n\n  R to play again" % (winner + 1)
+		_banner.text = "  PLAYER %d WINS\n\n A rematch  ·  B lobby" % (winner + 1)
 		_banner.add_theme_color_override("font_color", C.PLAYER_COLORS[winner])
 	_banner.visible = true
 
