@@ -2,7 +2,7 @@
 
 A local-multiplayer, Bomberman-style arena battler for **Windows** and **Raspberry Pi**, built for four people on one couch with four gamepads.
 
-> **Status: Milestone 2 code complete, hardware pass owed.** The hardware spike passed on a real Pi 400 (M0), the rule set exists and is unit-tested headless (M1), and there is now a lobby, four-player joining, hot-plug handling, a pause menu and a rematch flow (M2). Power-ups, bots and real art are still ahead — see the [roadmap](docs/roadmap.md).
+> **Status: Milestone 3 code complete, hardware pass and playtest owed.** The hardware spike passed on a real Pi 400 (M0), the rule set exists and is unit-tested headless (M1), there is a lobby with four-player joining, hot-plug handling and a pause menu (M2), and the game now has its economy: power-ups, Kick / Toss / Remote, the Dud curse, kit loss on death, crate regeneration, and best-of-3 with a scoreboard (M3). What M3 still owes is the part no test can do — four people on a sofa saying whether it is fun. Bots and real art are still ahead — see the [roadmap](docs/roadmap.md).
 
 ## Playing it
 
@@ -23,9 +23,19 @@ or `Enter` on the keyboard begins the round**. So the shortest keyboard-only
 route from launch to playing is `Space`, `Right Ctrl`, `Enter`.
 
 In a round, `START` or `Esc` pauses — resume, restart, or quit to the lobby —
-and unplugging a controller pauses the game until it comes back. At the final
-whistle, `A` / `Enter` rematches with the same players and `B` / `Backspace`
-returns to the lobby.
+and unplugging a controller pauses the game until it comes back.
+
+**A match is best of three.** Each round ends on the 2:00 clock, a scoreboard
+shows the kills, deaths and the match tally for four seconds (`A` skips it), and
+the next round starts itself. First to two round wins takes the match; a drawn
+round takes it from nobody, so a level match plays a decider. On the winner
+screen, `A` / `Enter` starts a fresh match with the same players and
+`B` / `Backspace` returns to the lobby.
+
+**`B` is your ability button, and you have at most one ability.** Walking into a
+bomb kicks it if you have Kick; `B` lobs the bomb under your feet two tiles if
+you have Toss, or detonates everything you own if you have Remote. Picking up
+one of Toss and Remote replaces the other.
 
 Development routes: `F1` title, `F2` stress benchmark, `F3` input sandbox, `F4`
 straight into a round with a stand-in roster, `F5` metrics overlay.
@@ -35,11 +45,30 @@ Every round is recorded to `user://replays/` as a seed plus an input log — abo
 bug report" practical.
 
 ```bash
-# Run the test suite headless (12 suites, 141 tests)
+# Run the test suite headless (17 suites, 239 tests)
 godot --headless --script res://tests/run_tests.gd
 
 # Load and step every scene, the way CI does
 godot --headless -- --smoke
+
+# Peak draw calls for the match and stress scenes. Needs a real renderer —
+# the headless dummy driver reports zero, so this refuses to run there.
+godot --fixed-fps 60 -- --measure
+```
+
+Deploy
+```
+C:\tools\Godot_v4.7\Godot_v4.7.2-stable_win64_console.exe --headless --path "D:\repositories\hen-grenade" --export-release "Linux arm32"
+
+scp build/linux-arm32/HenGrenade.arm32 build/linux-arm32/HenGrenade.pck malna@192.168.1.100:~/hen-grenade/
+
+ssh malna@192.168.1.100 "chmod +x ~/hen-grenade/HenGrenade.arm32"
+```
+
+Running
+
+```
+./HenGrenade.arm32 --rendering-driver opengl3
 ```
 
 ## What it is
@@ -64,9 +93,11 @@ The tone is light and playful, but **the theme and the final title are deliberat
 | [Milestone 0 build brief](docs/milestone-0-brief.md) | The executable spec for the first milestone: project settings, skeleton architecture, input contracts, the benchmark scene, and the measurement protocol |
 | [Milestone 1 build brief](docs/milestone-1-brief.md) | The executable spec for the simulation layer: the determinism contract, arena generation, movement, blasts and chains, respawn, replays, and the test plan |
 | [Milestone 2 build brief](docs/milestone-2-brief.md) | The executable spec for players and controllers: the slot model, join and menu input, the two hot-plug policies, the lobby, and the round lifecycle |
+| [Milestone 3 build brief](docs/milestone-3-brief.md) | The executable spec for the economy: the power-up table, the three abilities and the curse, kit loss on death, crate regeneration, best-of-3, and the PRNG draw-count rules that keep all of it deterministic |
 | [M0 completion notes](docs/progress/m0-completion.md) | What was implemented for M0 and the hardware pass result |
 | [M1 completion notes](docs/progress/m1-completion.md) | What was implemented for M1, what was verified, the rule decisions taken, and what is still owed |
 | [M2 completion notes](docs/progress/m2-completion.md) | What was implemented for M2, the input decisions taken, and the hardware checks still owed |
+| [M3 completion notes](docs/progress/m3-completion.md) | What was implemented for M3, the design calls taken, and the playtest that is the real exit criterion |
 | [Pi 400 measurements](docs/measurements/m0-pi400.md) | The performance protocol and the running record every milestone appends to |
 | [ADR 0001 — Engine choice](docs/decisions/0001-engine-choice.md) | Why Godot 4.7 over LÖVE, pygame, SDL, and Bevy |
 
@@ -77,4 +108,5 @@ The tone is light and playful, but **the theme and the final title are deliberat
 - **Gameplay runs in a pure, deterministic 60 Hz simulation** outside the scene tree, with rendering as a read-only view on top. That makes the rules unit-testable headless, gives us replays for bug reports and regression tests, makes bots and humans interchangeable, and leaves online play possible later without a rewrite.
 - **Milestone 0 was a hardware spike, not a feature.** Four F310s and 60 FPS on a real Pi 400 — measured on a deliberate worst-case scene, not a hello-world — were proven before a single gameplay rule was written. The Pi 400's GPU is the biggest risk in the project, so it got tested first, and the engine choice was written to be reversible at exactly that point. It passed; Godot stays.
 - **Milestone 2 is about the ten seconds before the game starts**, which is where a couch game is won or lost: you press A on the pad in your hand and you are in. The interesting engineering is not the lobby, it is the roster layer under it — joins, leaves, GUID reconnects and the four-identical-controllers case all live in a pure class with no `Node` and no `Input` in sight, so the flakiest logic in the project finally has a test suite instead of a hardware anecdote.
-- **Milestone 1 is the rule set, and it is testable rather than watchable.** Bombs, chains, kill credit, respawn and the round clock all live in `src/sim/` as a pure function of state and input, covered by 104 headless tests and a golden replay that must reproduce a committed state fingerprint. The programmer-art rendering on top is the last thing built, deliberately: if the rules are wrong, watching squares move around will not tell you.
+- **Milestone 1 is the rule set, and it is testable rather than watchable.** Bombs, chains, kill credit, respawn and the round clock all live in `src/sim/` as a pure function of state and input, covered by headless tests and golden replays that must reproduce committed state fingerprints. The programmer-art rendering on top is the last thing built, deliberately: if the rules are wrong, watching squares move around will not tell you.
+- **Milestone 3 is the first honest go/no-go on the design.** It adds the economy the game needs to be a game — drops, Kick, Toss, Remote, the Dud curse, half your kit scattered on the floor where you died, crates growing back, best of three — and then it gets played by four people who say whether any of it works. Every number behind it is a field in a `.tres`, because "does a death cost too much" is a playtest question and not a code question. The engineering care went where determinism could quietly break: the number of random draws a destroyed crate costs is a constant, and there is a test that asserts it.
