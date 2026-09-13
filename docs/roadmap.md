@@ -47,7 +47,7 @@ The rule set, headless and tested, with programmer-art rendering on top.
 Implementation detail is in the [Milestone 2 build brief](milestone-2-brief.md); see also the [M2 completion notes](progress/m2-completion.md).
 
 - Device manager: press-A-to-join, slot binding by GUID, keyboard slots, hot-plug pause and reconnect flow.
-- Lobby screen: four slots, each empty / human / bot, and start. No mode select — free-for-all is the only mode.
+- Lobby screen: four slots, each empty / human / bot, and start. No mode select yet — free-for-all is the only mode until M3.5.
 - Four-player round working end to end on real hardware.
 - Pause menu, quit-to-lobby, rematch flow.
 
@@ -70,9 +70,25 @@ Implementation detail is in the [Milestone 3 build brief](milestone-3-brief.md);
 
 ---
 
+## M3.5 — Hen Grenade mode *(~1 week)*
+
+Implementation detail is in the [Milestone 3.5 build brief](milestone-3.5-brief.md). This is a second way to play, not a rewrite of the first. Deathmatch stays the default and its committed golden *state* hashes must not move.
+
+- Lobby mode select: Deathmatch (2:00, best-of-3, most kills) or **Hen Grenade** (5:00, one round, most time as the Hen).
+- Half the usual crate density; one Hen token on a random empty floor cell at round start.
+- Collect the token, become the Hen: distinct silhouette, cannot place/Toss/Remote bombs, speed fixed at half of base, still one-hit.
+- Die as the Hen: drop the token (indestructible), respawn as a hunter. Anyone can take it again.
+- Score is integer ticks spent as the living Hen; unique longest duration wins.
+
+**Exit criteria:** two people can pick the mode in the lobby, finish a 5:00 round, and read who won from hen-seconds; a stranger who never cycles modes still gets the M3 deathmatch; the deathmatch golden state hashes are identical to M3.
+
+**M4's theme gate is unchanged.** Programmer art is enough to tell the Hen from a hunter. This milestone exists so the namesake mode is designed and pinned before art production starts, not so art starts early.
+
+---
+
 ## M4 — Presentation *(~3 weeks, the long pole)*
 
-**Entry gate: the theme has to be decided before this milestone starts.** It is intentionally open through M0–M3 (light and playful is the only constraint so far) because nothing before this point depends on it — programmer art carries us all the way through the first real playtest. Nothing in M4 can start without it.
+**Entry gate: the theme has to be decided before this milestone starts.** It is intentionally open through M0–M3.5 (light and playful is the only constraint so far) because nothing before this point depends on it — programmer art carries us all the way through the first real playtest and through the namesake mode. Nothing in M4 can start without it.
 
 - Final tileset and four character sheets with animations (idle, walk ×4, drop, death).
 - Blast, smoke, pickup, and death effects within the Pi budget.
@@ -89,7 +105,7 @@ Implementation detail is in the [Milestone 3 build brief](milestone-3-brief.md);
 ## M5 — Bots *(~2 weeks)*
 
 - Danger map (tiles that will be on fire, and when) as the shared foundation.
-- Behaviours: flee blast, path to power-up, break crates toward an opening, hunt an opponent, and go for a dropped kit after a kill.
+- Behaviours: flee blast, path to power-up, break crates toward an opening, hunt an opponent, go for a dropped kit after a kill, and (Hen Grenade) path to the token / hunt the Hen / flee as the Hen.
 - Three difficulties via reaction delay, search depth, and aggression.
 - Four-bot soak test: 200 headless rounds, no crashes, no player stuck unable to respawn, sane score spread.
 
@@ -109,7 +125,7 @@ Implementation detail is in the [Milestone 3 build brief](milestone-3-brief.md);
 
 ## Post-1.0 candidates
 
-Online multiplayer (the architecture is ready for lockstep or rollback), team battle and other modes, per-match power-up presets, additional arenas and tilesets, a map editor, replay viewer UI, eight players.
+Online multiplayer (the architecture is ready for lockstep or rollback), team battle, per-match power-up presets, additional arenas and tilesets, a map editor, replay viewer UI, eight players. Hen Grenade is no longer a post-1.0 idea; it is M3.5.
 
 ---
 
@@ -123,8 +139,8 @@ Online multiplayer (the architecture is ready for lockstep or rollback), team ba
 | Arena plays too large — four players rarely meet | Medium | Grid size is a data file, not code; speed and crate density are the first levers; answered at the M3 playtest |
 | Respawn deathmatch balance swings wildly (kit loss, spawn camping) | Medium | Spawn protection and the suicide penalty are in from M1; kit-loss fraction is a single tunable; bot soak test flags degenerate score spreads |
 | Accidental non-determinism creeps into the sim | Medium | Golden replay tests in CI from M1; fixed-point positions; single seeded PRNG; no `delta` in sim code |
-| Art production stalls the project | Medium | Programmer art through M3; theme and art sourcing strategy both settled before M4 starts; the game must be fun before it is pretty |
-| Theme stays undecided past M3 and blocks M4 | Medium | Treated as an explicit M4 entry gate rather than a background question; mechanics are written theme-free so the decision stays cheap right up to that point |
+| Art production stalls the project | Medium | Programmer art through M3.5; theme and art sourcing strategy both settled before M4 starts; the game must be fun before it is pretty |
+| Theme stays undecided past M3.5 and blocks M4 | Medium | Treated as an explicit M4 entry gate rather than a background question; mechanics are written theme-free so the decision stays cheap right up to that point |
 | Game is balanced but not fun | Medium | M3 exits on a real four-player playtest, early enough to change direction cheaply |
 | Godot arm32 export gotchas (texture import formats) | Low | Known issue, settings documented in the technical design, exercised in M0 CI |
 | Scope creep toward online play | Low | Explicit non-goal; architecture already leaves the door open, so there is no cost to saying "later" |

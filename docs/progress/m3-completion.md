@@ -77,10 +77,15 @@
 - **`--headless --write-movie` segfaults in 4.7.2** (signal 11, before the first frame, with any output path). M2 used it to catch an overlay that never drew; M3 needed it to check an overlay that draws in the *wrong place*, and could not. The replacement — the overlay reporting its own geometry — is better than the screenshot was, because it runs in CI. Recorded as [Appendix A.17](../technical-design.md); not investigated further, because a working alternative exists and the engine bug is not ours.
 - **The `1 resources still in use at exit` line from M2 is still there**, still `input_frame.gd`, still not growing, still unexplained. M3 changed nothing about it.
 
+## Notes for M3.5
+
+- **The namesake mode is designed, not implied.** [milestone-3.5-brief.md](../milestone-3.5-brief.md) is the executable spec: a second `GameMode` the sim fingerprints, a lobby cycle that does not steal Y/X/Back, a token that is not a power-up, and a hard rule that deathmatch `create()` spends no extra PRNG draws. Do not start M4 until that brief is either implemented or explicitly dropped.
+- Deathmatch goldens from this milestone are the regression for M3.5. If their *state* hashes move, FFA broke; regenerating them to hide that is the failure mode the M3 brief already named.
+
 ## Notes for M4
 
-- **The theme gate is now the only thing standing between here and M4.** The roadmap makes it an explicit entry gate and nothing in M0–M3 depended on it. Everything in the codebase is still theme-free.
-- `round_overlay.gd` is now the shared panel M2's notes asked for, and the options screen is its fifth mode rather than a new file. It already sizes itself, and `geometry_problems()` will check a fifth mode for free.
+- **The theme gate still stands.** M3.5 does not decide a setting or a final title; it adds a mechanical namesake on programmer art (a comb silhouette and a gold disc). The roadmap makes theme an explicit M4 entry gate and nothing in M0–M3.5 depended on it.
+- `round_overlay.gd` is now the shared panel M2's notes asked for, and the options screen is its fifth mode rather than a new file. It already sizes itself, and `geometry_problems()` will check a fifth mode for free. Hen-mode scoreboard strings (`94s`, `HEN GRENADE`) are a sixth geometry pass in M3.5, not a new overlay.
 - **Pickups need eight distinguishable sprites, and the readability pillar is the constraint.** The programmer art uses hue plus inner-square size, because hue alone fails the colourblind-safety requirement in game design §8 — whatever replaces it has to keep a shape difference, not just a palette.
 - **The effects budget has more room than expected.** 11 draw calls against 20 in a live round, and 56 pickups measured at zero additional calls. The lesson to carry in is the one in Appendix A.12: the cost of a class of entity is the number of *passes* it needs, not the number of instances.
 - `EntityView` draws a Remote bomb differently because a fuse-less bomb has no pulse to derive. Any M4 telegraphing pass has to keep that distinction — a bomb that is waiting rather than counting is important information.
@@ -89,4 +94,5 @@
 
 - **The danger map has more to model than M1 implied.** A bot has to reason about a kicked bomb in motion (`slide_dir`, `slide_ticks`), a Remote bomb that will never go off on its own, and a curse that has inverted its own controls. The last one is the interesting case: a `REVERSED` bot that does not know it is cursed will walk into its own bombs.
 - Pickups are a first-class goal now, and `MatchState.pickup_at()` is O(1), so "path to the nearest power-up" and "go for a dropped kit after a kill" are cheap to evaluate.
+- **Hen Grenade (M3.5) adds three bot goals the danger map does not cover:** path to the token, hunt the living Hen, and flee as the Hen (no bombs, half speed). They wait for M5; the M2 placeholder will wander into this mode exactly as badly as it wanders into deathmatch.
 - `BotSource` is still the M2 placeholder. M5 starts from a danger map, not from that file.

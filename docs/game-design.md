@@ -6,7 +6,9 @@
 
 ## 1. Pitch
 
-Hen Grenade is a local-multiplayer arena battler in the Bomberman tradition, played as a **timed deathmatch**. Two to four players share a wide arena, dropping fuse-lit bombs to blast apart crates, grab power-ups, and blow each other up. Death costs you a couple of seconds and some of your kit, not the round — you respawn and get straight back in. Two minutes, most kills wins.
+Hen Grenade is a local-multiplayer arena battler in the Bomberman tradition. Two to four players share a wide arena, dropping fuse-lit bombs to blast apart crates, grab power-ups, and blow each other up. Death costs you a couple of seconds and some of your kit, not the round — you respawn and get straight back in.
+
+Two modes share that loop. **Deathmatch** is the default: two minutes, most kills wins. **Hen Grenade** is the namesake: five minutes, one hunted player, most time spent as the Hen wins.
 
 ## 2. Design pillars
 
@@ -19,13 +21,18 @@ Hen Grenade is a local-multiplayer arena battler in the Bomberman tradition, pla
 ## 3. Core loop
 
 ```
-Lobby (join with controller)
-  └─> Match (best of 3, first to 2 round wins)
-        └─> Round (fixed 2:00)
+Lobby (join with controller, cycle mode with LB/RB)
+  └─> Match
+        Deathmatch: best of 3, first to 2 round wins
+        Hen Grenade: one round
+        └─> Round (2:00 deathmatch / 5:00 Hen Grenade)
               ├─ move on grid, drop bombs, break crates, grab power-ups
+              ├─ Hen Grenade: collect the token -> become the Hen;
+              │     die as Hen -> drop the token, respawn as a hunter
               ├─ die -> drop part of your kit -> respawn after 1.5 s
-              └─ clock hits 0:00: most points wins the round
-        └─> Scoreboard (kills / deaths, 4 s, skippable)
+              └─ clock hits 0:00: deathmatch most kill-score /
+                    Hen Grenade most seconds as the Hen
+        └─> Scoreboard (4 s, skippable)
   └─> Winner screen -> rematch (A) or back to lobby (B)
 ```
 
@@ -81,7 +88,9 @@ Scoring within a round:
 
 The suicide penalty matters more than it looks: with a 1.5 s respawn, blowing yourself up is otherwise nearly free, and self-preservation has to stay a real consideration.
 
-The round ends when the clock reaches **0:00** — always, with no overtime. Highest score wins the round; an equal top score is a draw and nobody takes the round. A match is **best of 3**, first to 2 round wins; if the match itself ends level, play a decider.
+The round ends when the clock reaches **0:00** — always, with no overtime. In deathmatch, highest kill-score wins the round; an equal top score is a draw and nobody takes the round. A deathmatch match is **best of 3**, first to 2 round wins; if the match itself ends level, play a decider.
+
+Hen Grenade scoring is in §7.1: kill-score is still counted, and it does not decide the round.
 
 ## 6. Power-ups
 
@@ -128,17 +137,37 @@ If this proves fiddly in practice, the simpler fallback is to skip crate regener
 
 ## 7. Modes
 
-**Free-for-all is the only mode.** Two to four players, any mix of humans and bots, timed deathmatch as described above.
+Two to four players, any mix of humans and bots. The lobby offers two modes; deathmatch is the default so a sofa that never touches LB/RB gets the game M1–M3 already described.
 
-Bots are a first-class feature, not a stretch goal: two-player sessions are the common case and a pair of bots makes them much better. Three difficulty levels (internally Easy / Normal / Hard) differing in reaction delay, escape-route search depth, and willingness to take aggressive trades.
+Bots are a first-class feature, not a stretch goal: two-player sessions are the common case and a pair of bots makes them much better. Three difficulty levels (internally Easy / Normal / Hard) differing in reaction delay, escape-route search depth, and willingness to take aggressive trades. Hunting the Hen is an M5 behaviour, not a special case in the placeholder.
 
-Team play, and any other mode, is deferred (§9).
+Team play, and any mode beyond these two, is deferred (§9).
+
+### 7.1 Hen Grenade
+
+The namesake. Same arena, same bombs, same economy; a different objective.
+
+**Setup.** Crates generate at **half** the arena's usual density **(tune)**. The round clock is **5:00**. One **Hen token** is placed on a random empty floor cell. Nobody starts as the Hen.
+
+**Becoming the Hen.** Walking onto the token collects it. That player becomes the Hen. There is never more than one. The Hen is a different silhouette (shape, not just colour — §8), keeps their slot colour on the outline, and:
+
+- cannot place a bomb, and cannot use Toss or Remote;
+- has the same one-hit death as everyone else (there is no health bar);
+- moves at a **fixed** speed of **0.5 × base (tune)**, ignoring Speed Ups and the FAST curse. Kick still works if they have it.
+
+**Death.** When the Hen dies to a blast, the token drops back onto the floor (it cannot be destroyed by fire) and that player respawns as a hunter after the usual delay, having lost kit the usual way. Any living player can take the token again, including the one who just dropped it, once they are back.
+
+**Scoring.** The round counts ticks spent as the *living* Hen. Display is whole seconds. The unique longest total wins; a tie is a draw. A death tick does not pay. Kill-score is still recorded and shown as flavour.
+
+**Match length.** One round is the match. Five minutes times a best-of-3 would be a different game. Rematch from the winner screen starts a fresh 5:00 with the same people.
+
+The token is not a power-up. It never comes out of a crate, it does not share the drop table, and a blast does not delete the objective.
 
 ## 8. Presentation
 
 - **Pixel art**, 20 × 20 px tiles, with 4-colour-plus-outline character palettes so the four players read instantly as red / blue / yellow / green even at a distance.
 - Base render resolution **640 × 360**, integer-scaled to the display (×2 at 720p, ×3 at 1080p). Nearest-neighbour filtering, no sub-pixel camera movement.
-- Layout: the 500 × 300 arena centred, a **70 px HUD panel down each side** carrying two player cards each (score, bombs, blast, speed, abilities, respawn countdown), and the **round clock** centred in the top band. The clock changes colour and ticks audibly for the last 10 seconds.
+- Layout: the 500 × 300 arena centred, a **70 px HUD panel down each side** carrying two player cards each (score or hen-seconds, bombs, blast, speed, abilities, respawn countdown), and the **round clock** centred in the top band. The clock changes colour and ticks audibly for the last 10 seconds. In Hen Grenade the clock also names who is the Hen, or that the token is still on the floor.
 - The whole arena is always on screen. No camera work, no split screen.
 - **Telegraphing is a rendering requirement:** bombs pulse faster as the fuse runs out, flames have a 3-frame anticipation, a bomb about to detonate tints the tiles its blast will cover, and respawning players blink for the duration of their spawn protection. Readability beats realism.
 - Audio: short, punchy, mono-friendly SFX (TV speakers), one music loop per arena, distinct per-player death and kill stings. Music ducks under explosions.
@@ -147,17 +176,18 @@ Team play, and any other mode, is deferred (§9).
 ## 9. Explicit non-goals for 1.0
 
 - **Online multiplayer.** The architecture keeps the door open (see the technical design), but shipping netcode is a separate project.
-- **Team battle**, and every other mode besides free-for-all.
-- **Per-match power-up presets** in the lobby. One balanced default rule set for now.
-- Elimination-style rounds, a shrinking arena, or sudden death. The 2:00 clock is the only round-ending mechanism.
+- **Team battle**, and every mode besides deathmatch and Hen Grenade.
+- **Per-match power-up presets** in the lobby. One balanced default rule set per mode.
+- Elimination-style rounds, a shrinking arena, sudden death, or a health system. The clock is the only round-ending mechanism (2:00 or 5:00, depending on mode).
 - Single-player campaign, story, unlocks, progression, or cosmetics economy.
 - 3D, dynamic lighting, or anything else that spends the Pi's modest GPU budget on things that do not improve a two-minute round.
 - More than four players. Four USB pads and one screen is the target living room.
 
 ## 10. Open design questions
 
-1. **Theme and title.** Deliberately open. The tone is light and playful; the setting is not chosen. Mechanically nothing depends on it, but art production does, so this needs an answer **before Milestone 4** — everything up to and including the first real playtest can run on programmer art. Whatever we pick must survive the readability pillar: four instantly distinguishable player silhouettes and blast lines you can read at a glance.
+1. **Theme and title.** Deliberately open. The tone is light and playful; the setting is not chosen. Mechanically nothing depends on it, but art production does, so this needs an answer **before Milestone 4** — everything up to and including M3.5 can run on programmer art. Whatever we pick must survive the readability pillar: four instantly distinguishable player silhouettes (and a fifth Hen silhouette that is a *shape* change, not a fifth hue) and blast lines you can read at a glance.
 2. **Does the 23 × 13 interior play too large for four players?** (§4) First playtest question, cheap to change.
 3. **How much kit should a death cost?** (§6.1) Half is a starting guess, not a considered answer.
 4. **Crate regeneration or periodic power-up drops?** (§6.2) Depends on whether regenerating crates feel like a fair part of the arena or like random interference.
-5. **Is two minutes the right round length,** and is best-of-3 the right match length at ~6–7 minutes total?
+5. **Is two minutes the right deathmatch round length,** and is best-of-3 the right match length at ~6–7 minutes total?
+6. **Hen Grenade feel** (M3.5). Is half-speed too slow to be fun? Is five minutes the right hunt? Is half crate density open enough to chase and still crate-y enough to hide? Does Kick-as-Hen save the hunted player or stall the round? All four are playtest questions; the numbers are fields on the Hen `GameMode` resource.
