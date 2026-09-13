@@ -23,26 +23,8 @@ const FLAME_CORE: Color = Color8(255, 236, 150)
 const FLAME_EDGE: Color = Color8(255, 128, 40)
 const BOMB_COLOR: Color = Color8(24, 24, 28)
 
-## Pickup colours, indexed by Powerup.Kind (so index 0 is unused). Programmer art
-## again, and the constraint is the readability pillar rather than beauty: with a
-## 20 px tile and no sprites, **hue plus inner-shape size** is all the
-## distinguishing information there is, so no two kinds share both.
-const PICKUP_COLORS: Array[Color] = [
-	Color8(0, 0, 0),          # NONE, never drawn
-	Color8(250, 170, 60),     # BOMB     orange
-	Color8(240, 90, 90),      # BLAST    red
-	Color8(110, 220, 250),    # SPEED    cyan
-	Color8(140, 230, 130),    # KICK     green
-	Color8(200, 150, 250),    # TOSS     violet
-	Color8(250, 240, 110),    # REMOTE   yellow
-	Color8(255, 255, 255),    # JACKPOT  white
-	Color8(120, 100, 110),    # DUD      grey — the one that should not look nice
-]
-## Inner-square half-size per kind, so the eight drops differ in silhouette and
-## not only in hue (accessibility, game design §8).
-const PICKUP_INNER: Array[float] = [0.0, 2.0, 4.0, 3.0, 2.0, 4.0, 3.0, 5.0, 1.0]
-const PICKUP_HALF: float = 6.0
-const PICKUP_SHELL: Color = Color8(18, 18, 22)
+## Pickup look is PickupArt, shared with the lobby/HUD legend so a retune here
+## cannot leave the key describing a different shape.
 
 ## Spawn protection blinks at this period, in ticks. 8 on / 8 off is fast enough
 ## to read as "protected" without being a strobe.
@@ -142,11 +124,11 @@ func _draw_pickups() -> void:
 		return
 	for t in tiles:
 		var c: Vector2 = _tile_px(t)
-		draw_rect(Rect2(c.x - PICKUP_HALF, c.y - PICKUP_HALF, PICKUP_HALF * 2.0, PICKUP_HALF * 2.0), PICKUP_SHELL, true)
+		draw_rect(Rect2(c.x - PickupArt.HALF, c.y - PickupArt.HALF, PickupArt.HALF * 2.0, PickupArt.HALF * 2.0), PickupArt.SHELL, true)
 	for i in range(tiles.size()):
 		var c: Vector2 = _tile_px(tiles[i])
-		var half: float = PICKUP_INNER[kinds[i]]
-		draw_rect(Rect2(c.x - half, c.y - half, half * 2.0, half * 2.0), PICKUP_COLORS[kinds[i]], true)
+		var half: float = PickupArt.INNER[kinds[i]]
+		draw_rect(Rect2(c.x - half, c.y - half, half * 2.0, half * 2.0), PickupArt.COLORS[kinds[i]], true)
 
 func _collect_flames(out_rects: Array[Rect2], out_ages: PackedFloat32Array) -> void:
 	var arena: Arena = state.arena

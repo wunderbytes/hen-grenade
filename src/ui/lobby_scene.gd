@@ -48,12 +48,18 @@ func _ready() -> void:
 		_cards_header.append(_add_label(origin + Vector2(8, 6), 10, C.PLAYER_COLORS[i], false))
 		_cards_body.append(_add_label(origin + Vector2(8, 34), 8, Color(0.86, 0.88, 0.86), false))
 
-	_status = _add_label(Vector2(C.VIEW_W / 2.0 - 80, 202), 10, Color(0.95, 0.95, 0.9), false)
+	_status = _add_label(Vector2(C.VIEW_W / 2.0 - 80, 196), 10, Color(0.95, 0.95, 0.9), false)
 
-	var pad_help: Label = _add_label(Vector2(24, 238), 8, Color(0.62, 0.70, 0.62), false)
+	var pad_help: Label = _add_label(Vector2(24, 222), 8, Color(0.62, 0.70, 0.62), false)
 	pad_help.text = "A join    B leave    Y add bot    X drop bot    START begin"
-	var kb_help: Label = _add_label(Vector2(24, 252), 8, Color(0.52, 0.58, 0.52), false)
+	var kb_help: Label = _add_label(Vector2(24, 236), 8, Color(0.52, 0.58, 0.52), false)
 	kb_help.text = "keyboard: SPACE / RIGHT CTRL join, Q / slash leave, B / N bots, ENTER begin"
+
+	var legend: PowerupLegend = PowerupLegend.new()
+	legend.compact = false
+	legend.position = Vector2(24, 258)
+	add_child(legend)
+
 	var dev_help: Label = _add_label(Vector2(24, C.VIEW_H - 14), 8, Color(0.40, 0.46, 0.40), false)
 	dev_help.text = "F1 title   F2 stress   F3 sandbox   F5 metrics"
 

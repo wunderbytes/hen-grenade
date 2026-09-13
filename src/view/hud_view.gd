@@ -51,6 +51,14 @@ func _ready() -> void:
 	_hint = _make_label(Vector2(4, C.VIEW_H - 12), FONT_SIZE, Color(0.55, 0.62, 0.55), false)
 	_hint.text = "ESC pause  F1 title  F3 sandbox  F5 metrics"
 
+	var legend: PowerupLegend = PowerupLegend.new()
+	legend.compact = true
+	# Its own line in the bottom band, above the hint and clear of the arena,
+	# spread across the full viewport rather than bunched over the middle.
+	legend.span_w = C.VIEW_W - 8
+	legend.position = Vector2(4, C.VIEW_H - 26)
+	add_child(legend)
+
 ## `record` may be null — the dev scenes and an early frame have a round without
 ## a match around it — in which case the tally line is simply left off.
 func sync(state: MatchState, record: MatchRecord = null) -> void:
