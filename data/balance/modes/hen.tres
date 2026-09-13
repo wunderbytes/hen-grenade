@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="GameMode" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/sim/game_mode.gd" id="1_mode"]
+
+[resource]
+script = ExtResource("1_mode")
+id = 1
+display_name = "HEN GRENADE"
+round_ticks = 18000
+crate_scale_permille = 500
+crate_cap_permille = 250
+hen_speed_units = 8
+scoring = 1
+match_rules_path = "res://data/balance/match_hen.tres"

@@ -62,9 +62,10 @@ func _ready() -> void:
 ## `record` may be null — the dev scenes and an early frame have a round without
 ## a match around it — in which case the tally line is simply left off.
 func sync(state: MatchState, record: MatchRecord = null) -> void:
-	_clock.text = _format_clock(state.seconds_left())
+	_clock.text = _clock_text(state)
 	var urgent: bool = state.seconds_left() <= URGENT_SECONDS
 	_clock.add_theme_color_override("font_color", Color(1, 0.35, 0.3) if urgent else Color(0.95, 0.95, 0.9))
+	_clock.position = Vector2(C.VIEW_W / 2.0 - (70.0 if state.mode != null and state.mode.is_hen() else 22.0), 6)
 
 	for slot in range(C.MAX_PLAYERS):
 		_cards[slot].text = _card_text(state, slot, record)
@@ -73,15 +74,21 @@ func sync(state: MatchState, record: MatchRecord = null) -> void:
 ## they are doing, what they are carrying, and what is about to happen to them.
 func _card_text(state: MatchState, slot: int, record: MatchRecord) -> String:
 	var p: PlayerState = state.players[slot]
+	var hen: bool = state.mode != null and state.mode.is_hen()
 	var header: String = "P%d" % (slot + 1)
-	if record != null:
+	if record != null and not hen:
 		header += " " + record.pips(slot)
+	if hen and state.hen_slot == slot and p.alive:
+		header += " HEN"
 	if not p.active:
 		return "%s\n—" % header
 
 	var lines: PackedStringArray = PackedStringArray()
 	lines.append(header)
-	lines.append("%d pts" % p.score)
+	if hen:
+		lines.append("%ds" % (p.hen_ticks / C.TICK_HZ))
+	else:
+		lines.append("%d pts" % p.score)
 	lines.append("%dk / %dd" % [p.kills, p.deaths])
 	lines.append("bomb %d" % p.bomb_capacity)
 	lines.append("blast %d" % p.blast_radius)
@@ -109,6 +116,14 @@ func _card_text(state: MatchState, slot: int, record: MatchRecord) -> String:
 	elif p.spawn_protect_ticks > 0:
 		lines.append("SAFE")
 	return "\n".join(lines)
+
+func _clock_text(state: MatchState) -> String:
+	var clock: String = _format_clock(state.seconds_left())
+	if state.mode == null or not state.mode.is_hen():
+		return clock
+	if state.hen_slot >= 0:
+		return "%s  HEN P%d" % [clock, state.hen_slot + 1]
+	return "%s  TOKEN" % clock
 
 func _format_clock(seconds: int) -> String:
 	return "%d:%02d" % [seconds / 60, seconds % 60]

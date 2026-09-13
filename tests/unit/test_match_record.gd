@@ -154,6 +154,17 @@ func test_rules_resources_drive_the_record() -> void:
 	var fallback: MatchRecord = MatchRecord.from_rules(null)
 	assert_eq(fallback.target_wins, 2, "the fallback lost its default")
 
+func test_hen_match_rules_end_after_a_single_recorded_round() -> void:
+	var res: Resource = load("res://data/balance/match_hen.tres")
+	assert_true(res is MatchRules, "match_hen.tres is missing")
+	var r: MatchRecord = MatchRecord.from_rules(res as MatchRules)
+	r.set_active([true, true, false, false])
+	assert_false(r.is_over(), "an unplayed hen match is already over")
+	r.record_round(0)
+	assert_true(r.is_over(), "a hen match did not end after one round")
+	assert_eq(r.winner(), 0, "the hen match winner")
+	assert_eq(r.rounds_played(), 1, "rounds played")
+
 func test_out_of_range_slots_are_harmless() -> void:
 	record.record_round(9)
 	assert_eq(record.rounds_played(), 1, "the round was not recorded")

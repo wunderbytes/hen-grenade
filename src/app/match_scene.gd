@@ -51,6 +51,7 @@ var _notified_slots: Array[int] = []
 var _scoreboard_ticks: int = 0
 
 var _rules: MatchRules = null
+var _mode: GameMode = null
 var _arena_view: TileMapLayer
 var _entities: Node2D
 var _hud: Node2D
@@ -77,6 +78,7 @@ func _ready() -> void:
 	# F4-straight-to-match or the CI smoke.
 	DeviceManager.enter_match()
 	DeviceManager.ensure_dev_roster()
+	_mode = Session.load_mode()
 	_rules = _load_match_rules()
 	start_match()
 
@@ -91,7 +93,7 @@ func start_match() -> void:
 ## never touched again: everything downstream of it is deterministic, which is
 ## what makes "the seed on the scoreboard replays the layout" true.
 func start_round(seed_value: int) -> void:
-	state = MatchState.create(_load_balance(), _load_arena_def(), seed_value, DeviceManager.active_flags(), _load_powerups())
+	state = MatchState.create(_load_balance(), _load_arena_def(), seed_value, DeviceManager.active_flags(), _load_powerups(), _mode)
 	replay = Replay.for_state(state)
 	_tick = 0
 	_set_phase(Phase.RUNNING)
@@ -281,7 +283,7 @@ func _show_scoreboard() -> void:
 func _advance_match() -> void:
 	if record.is_over():
 		_set_phase(Phase.MATCH_OVER)
-		_overlay.show_match_result(record)
+		_overlay.show_match_result(record, state)
 		return
 	start_round(_fresh_seed())
 
@@ -348,6 +350,24 @@ func smoke_overlay_match_result() -> void:
 	shown.record_round(0, PackedInt32Array([3, 3, 2, 1]))
 	_overlay.show_match_result(shown)
 
+func smoke_overlay_hen_scoreboard() -> void:
+	var hen_mode: GameMode = GameMode.hen()
+	var hen_state: MatchState = MatchState.create(
+		_load_balance(), _load_arena_def(), 1, DeviceManager.active_flags(), _load_powerups(), hen_mode
+	)
+	for p in hen_state.players:
+		p.hen_ticks = 300 * C.TICK_HZ
+		p.kills = 12
+		p.deaths = 12
+		p.score = -3
+	var hen_rules: MatchRules = MatchRules.new()
+	hen_rules.round_wins_to_take_match = 1
+	hen_rules.max_rounds = 1
+	var shown: MatchRecord = MatchRecord.from_rules(hen_rules)
+	shown.set_active(DeviceManager.active_flags())
+	shown.record_round(0, PackedInt32Array([18000, 12000, 6000, 0]))
+	_overlay.show_scoreboard(hen_state, shown, 4)
+
 func smoke_overlay_hide() -> void:
 	_overlay.hide_overlay()
 
@@ -396,6 +416,7 @@ func smoke_phases() -> PackedStringArray:
 		problems.append("Restart round filed a result with the match record")
 
 	problems.append_array(_smoke_match_flow())
+	problems.append_array(_smoke_hen_match_flow())
 	problems.append_array(_smoke_overlay_geometry())
 	return problems
 
@@ -419,6 +440,8 @@ func _smoke_overlay_geometry() -> PackedStringArray:
 	problems.append_array(_overlay.geometry_problems("scoreboard"))
 	_overlay.show_match_result(record_shown)
 	problems.append_array(_overlay.geometry_problems("winner screen"))
+	smoke_overlay_hen_scoreboard()
+	problems.append_array(_overlay.geometry_problems("hen scoreboard"))
 	_overlay.hide_overlay()
 	return problems
 
@@ -476,6 +499,37 @@ func _smoke_match_flow() -> PackedStringArray:
 		problems.append("a rematch kept the previous match's record")
 	return problems
 
+## A shortened Hen round: one round is the match. Uses a 90-tick clock so smoke
+## does not sit through 5:00.
+func _smoke_hen_match_flow() -> PackedStringArray:
+	var problems: PackedStringArray = PackedStringArray()
+	var previous_mode: GameMode = _mode
+	var previous_rules: MatchRules = _rules
+	_mode = GameMode.hen()
+	_mode.round_ticks = 90
+	_rules = MatchRules.new()
+	_rules.round_wins_to_take_match = 1
+	_rules.max_rounds = 1
+	_rules.scoreboard_ticks = 12
+	start_match()
+	if not state.mode.is_hen():
+		problems.append("hen smoke did not start in hen mode")
+	if state.round_ticks_left != 90:
+		problems.append("hen smoke did not use the shortened clock")
+	smoke_step(state.round_ticks_left + 5)
+	if _phase != Phase.SCOREBOARD:
+		problems.append("a hen round did not raise the scoreboard")
+	for _i in range(_rules.scoreboard_ticks + 2):
+		if _phase != Phase.SCOREBOARD:
+			break
+		_tick_scoreboard()
+	if _phase != Phase.MATCH_OVER:
+		problems.append("a finished hen match started another round")
+	_mode = previous_mode
+	_rules = previous_rules
+	start_match()
+	return problems
+
 # --- Loading ----------------------------------------------------------------
 
 ## Falls back to code defaults if a resource is missing or has been replaced by
@@ -503,10 +557,18 @@ func _load_powerups() -> PowerupTable:
 	return PowerupTable.new()
 
 func _load_match_rules() -> MatchRules:
-	var res: Resource = load(MATCH_RULES_PATH)
+	var path: String = MATCH_RULES_PATH
+	if _mode != null and _mode.match_rules_path != "":
+		path = _mode.match_rules_path
+	var res: Resource = load(path)
 	if res is MatchRules:
 		return res as MatchRules
-	push_warning("%s is missing or not a MatchRules; using built-in defaults" % MATCH_RULES_PATH)
+	push_warning("%s is missing or not a MatchRules; using built-in defaults" % path)
+	if _mode != null and _mode.is_hen():
+		var hen_rules: MatchRules = MatchRules.new()
+		hen_rules.round_wins_to_take_match = 1
+		hen_rules.max_rounds = 1
+		return hen_rules
 	return MatchRules.new()
 
 func _fresh_seed() -> int:

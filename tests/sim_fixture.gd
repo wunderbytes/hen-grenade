@@ -44,22 +44,22 @@ static func always_drops(kind: int) -> PowerupTable:
 
 ## A state on a completely empty arena (border only), with `player_count` slots
 ## active and sitting on their spawn tiles.
-static func open_state(p_balance: Balance = null, player_count: int = 2, p_seed: int = 12345, p_powerups: PowerupTable = null) -> MatchState:
+static func open_state(p_balance: Balance = null, player_count: int = 2, p_seed: int = 12345, p_powerups: PowerupTable = null, p_mode: GameMode = null) -> MatchState:
 	var bal: Balance = p_balance if p_balance != null else balance()
 	var active: Array[bool] = []
 	for i in range(C.MAX_PLAYERS):
 		active.append(i < player_count)
-	var state: MatchState = MatchState.create(bal, arena_def(0), p_seed, active, p_powerups)
+	var state: MatchState = MatchState.create(bal, arena_def(0), p_seed, active, p_powerups, p_mode)
 	clear_interior(state.arena)
 	return state
 
 ## A state on a normally generated arena — crates, pillars and all.
-static func generated_state(p_balance: Balance = null, player_count: int = 2, p_seed: int = 12345, p_powerups: PowerupTable = null) -> MatchState:
+static func generated_state(p_balance: Balance = null, player_count: int = 2, p_seed: int = 12345, p_powerups: PowerupTable = null, p_mode: GameMode = null) -> MatchState:
 	var bal: Balance = p_balance if p_balance != null else balance()
 	var active: Array[bool] = []
 	for i in range(C.MAX_PLAYERS):
 		active.append(i < player_count)
-	return MatchState.create(bal, arena_def(700), p_seed, active, p_powerups)
+	return MatchState.create(bal, arena_def(700), p_seed, active, p_powerups, p_mode)
 
 static func clear_interior(arena: Arena) -> void:
 	for y in range(1, arena.h - 1):

@@ -70,8 +70,13 @@ func record_round_from(state: MatchState) -> void:
 	var scores: PackedInt32Array = PackedInt32Array()
 	scores.resize(C.MAX_PLAYERS)
 	for i in range(mini(state.players.size(), C.MAX_PLAYERS)):
-		scores[i] = state.players[i].score
+		scores[i] = _round_score_of(state, state.players[i])
 	record_round(state.winner(), scores)
+
+func _round_score_of(state: MatchState, p: PlayerState) -> int:
+	if state.mode != null and state.mode.scoring == GameMode.Scoring.HEN_TICKS:
+		return p.hen_ticks
+	return p.score
 
 # --- Queries -----------------------------------------------------------------
 

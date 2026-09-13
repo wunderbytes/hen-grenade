@@ -90,7 +90,12 @@ func duplicate_arena() -> Arena:
 ## Steps 3 and 4 run *after* the draw rather than as a filter before it, so
 ## clearance geometry can never shift the PRNG sequence. Change the spawn
 ## layout and the crates stay exactly where they were.
-static func generate(def: ArenaDef, rng: SimRng) -> Arena:
+## `crate_permille` overrides `def.crate_permille` when >= 0, without mutating
+## the resource. Hen mode passes a scaled density this way. The *number* of
+## draws is independent of the threshold: every eligible quadrant tile still
+## spends exactly one `next_below(1000)`.
+static func generate(def: ArenaDef, rng: SimRng, crate_permille: int = -1) -> Arena:
+	var density: int = def.crate_permille if crate_permille < 0 else crate_permille
 	var arena: Arena = Arena.new(def.grid_w, def.grid_h)
 
 	for y in range(arena.h):
@@ -110,7 +115,7 @@ static func generate(def: ArenaDef, rng: SimRng) -> Arena:
 			var t: Vector2i = Vector2i(x, y)
 			if arena.at(t) != Tile.FLOOR:
 				continue      # a pillar: not eligible, and draws no number
-			var place: bool = rng.next_below(1000) < def.crate_permille
+			var place: bool = rng.next_below(1000) < density
 			if not place:
 				continue
 			for m in arena.mirrors_of(t):

@@ -79,7 +79,7 @@
 
 ## Notes for M3.5
 
-- **The namesake mode is designed, not implied.** [milestone-3.5-brief.md](../milestone-3.5-brief.md) is the executable spec: a second `GameMode` the sim fingerprints, a lobby cycle that does not steal Y/X/Back, a token that is not a power-up, and a hard rule that deathmatch `create()` spends no extra PRNG draws. Do not start M4 until that brief is either implemented or explicitly dropped.
+- **The namesake mode is in.** See [m3.5-completion.md](m3.5-completion.md). Deathmatch goldens from this milestone stayed put; that was the regression.
 - Deathmatch goldens from this milestone are the regression for M3.5. If their *state* hashes move, FFA broke; regenerating them to hide that is the failure mode the M3 brief already named.
 
 ## Notes for M4

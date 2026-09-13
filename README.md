@@ -2,7 +2,7 @@
 
 A local-multiplayer, Bomberman-style arena battler for **Windows** and **Raspberry Pi**, built for four people on one couch with four gamepads.
 
-> **Status: Milestone 3 code complete, hardware pass and playtest owed. Milestone 3.5 is designed, not implemented.** The hardware spike passed on a real Pi 400 (M0), the rule set exists and is unit-tested headless (M1), there is a lobby with four-player joining, hot-plug handling and a pause menu (M2), and the game now has its economy: power-ups, Kick / Toss / Remote, the Dud curse, kit loss on death, crate regeneration, and best-of-3 with a scoreboard (M3). What M3 still owes is the part no test can do — four people on a sofa saying whether it is fun. The namesake **Hen Grenade** mode is specified as [Milestone 3.5](docs/milestone-3.5-brief.md) before presentation work starts. Bots and real art are still ahead — see the [roadmap](docs/roadmap.md).
+> **Status: Milestone 3.5 code complete, headless-verified.** The hardware spike passed on a real Pi 400 (M0), the rule set exists and is unit-tested headless (M1), there is a lobby with four-player joining, hot-plug handling and a pause menu (M2), the economy is in (M3), and the namesake **Hen Grenade** mode is playable from the lobby (M3.5): 5:00, one token, most time as the Hen wins. Deathmatch is still the default. M3 still owes a four-person playtest. Presentation, bots, and a theme decision are ahead — see the [roadmap](docs/roadmap.md).
 
 ## Playing it
 
@@ -18,9 +18,11 @@ Two players minimum, four maximum, any mix of humans and (placeholder) bots.
 | **Keyboard seat 1** | `W` `A` `S` `D` | `Space` | `Q` |
 | **Keyboard seat 2** | arrow keys | `Right Ctrl` | `/` |
 
-`Y` / `X` add and drop a bot (`B` / `N` on the keyboard), and **`START` on a pad
-or `Enter` on the keyboard begins the round**. So the shortest keyboard-only
-route from launch to playing is `Space`, `Right Ctrl`, `Enter`.
+`Y` / `X` add and drop a bot (`B` / `N` on the keyboard). **LB / RB** (or `[` / `]`
+on the keyboard) cycles **DEATHMATCH** and **HEN GRENADE**. Leaving the chips
+alone stays deathmatch. **`START` on a pad or `Enter` on the keyboard begins
+the round**. So the shortest keyboard-only route from launch to playing is
+`Space`, `Right Ctrl`, `Enter`.
 
 In a round, `START` or `Esc` pauses — resume, restart, or quit to the lobby —
 and unplugging a controller pauses the game until it comes back.
@@ -30,10 +32,10 @@ scoreboard shows the kills, deaths and the match tally for four seconds (`A`
 skips it), and the next round starts itself. First to two round wins takes the
 match; a drawn round takes it from nobody, so a level match plays a decider.
 
-The lobby will cycle **HEN GRENADE** with `LB` / `RB` (`[` / `]` on the
-keyboard) once Milestone 3.5 is implemented: one 5:00 round at half crate
-density, collect the token, most seconds as the Hen wins. Leaving the chips
-alone stays deathmatch.
+**HEN GRENADE** is one 5:00 round at half crate density. Collect the gold token
+to become the Hen — slower, no bombs, a comb silhouette. Die and the token
+drops; anyone can take it. Most seconds as the Hen wins. Rematch from the winner
+screen starts a fresh 5:00 with the same roster.
 
 On the winner screen, `A` / `Enter` starts a fresh match with the same players
 and `B` / `Backspace` returns to the lobby.
@@ -51,7 +53,7 @@ Every round is recorded to `user://replays/` as a seed plus an input log — abo
 bug report" practical.
 
 ```bash
-# Run the test suite headless (17 suites, 239 tests)
+# Run the test suite headless (19 suites, 265 tests)
 godot --headless --script res://tests/run_tests.gd
 
 # Load and step every scene, the way CI does
@@ -81,7 +83,7 @@ Running
 
 Two to four players share a wide arena, dropping fuse-lit bombs to blast apart crates, grab power-ups, and blow each other up. Dying costs you a second and a half and some of your kit, never the round, so nobody ever sits and watches. **Deathmatch** is two minutes, most kills wins. **Hen Grenade** is five minutes, one hunted player, most time as the Hen wins. No accounts, no online, no menus between rounds — plug in a controller, press A, play.
 
-The tone is light and playful, but **the theme and the final title are deliberately still open** — the design is written theme-free so the decision can wait until art production starts. The namesake mode is designed in M3.5, still on programmer art.
+The tone is light and playful, but **the theme and the final title are deliberately still open** — the design is written theme-free so the decision can wait until art production starts. The namesake mode is in as of M3.5, still on programmer art.
 
 ## Planned targets
 
@@ -105,6 +107,7 @@ The tone is light and playful, but **the theme and the final title are deliberat
 | [M1 completion notes](docs/progress/m1-completion.md) | What was implemented for M1, what was verified, the rule decisions taken, and what is still owed |
 | [M2 completion notes](docs/progress/m2-completion.md) | What was implemented for M2, the input decisions taken, and the hardware checks still owed |
 | [M3 completion notes](docs/progress/m3-completion.md) | What was implemented for M3, the design calls taken, and the playtest that is the real exit criterion |
+| [M3.5 completion notes](docs/progress/m3.5-completion.md) | What was implemented for Hen Grenade mode, and that deathmatch goldens did not move |
 | [Pi 400 measurements](docs/measurements/m0-pi400.md) | The performance protocol and the running record every milestone appends to |
 | [ADR 0001 — Engine choice](docs/decisions/0001-engine-choice.md) | Why Godot 4.7 over LÖVE, pygame, SDL, and Bevy |
 
@@ -117,4 +120,4 @@ The tone is light and playful, but **the theme and the final title are deliberat
 - **Milestone 2 is about the ten seconds before the game starts**, which is where a couch game is won or lost: you press A on the pad in your hand and you are in. The interesting engineering is not the lobby, it is the roster layer under it — joins, leaves, GUID reconnects and the four-identical-controllers case all live in a pure class with no `Node` and no `Input` in sight, so the flakiest logic in the project finally has a test suite instead of a hardware anecdote.
 - **Milestone 1 is the rule set, and it is testable rather than watchable.** Bombs, chains, kill credit, respawn and the round clock all live in `src/sim/` as a pure function of state and input, covered by headless tests and golden replays that must reproduce committed state fingerprints. The programmer-art rendering on top is the last thing built, deliberately: if the rules are wrong, watching squares move around will not tell you.
 - **Milestone 3 is the first honest go/no-go on the design.** It adds the economy the game needs to be a game — drops, Kick, Toss, Remote, the Dud curse, half your kit scattered on the floor where you died, crates growing back, best of three — and then it gets played by four people who say whether any of it works. Every number behind it is a field in a `.tres`, because "does a death cost too much" is a playtest question and not a code question. The engineering care went where determinism could quietly break: the number of random draws a destroyed crate costs is a constant, and there is a test that asserts it.
-- **Milestone 3.5 is the namesake mode, specified before M4.** Deathmatch stays the default. Hen Grenade is five minutes, half the crates, one token, one hunted player who cannot bomb and moves at half speed, and the winner is whoever spent the most seconds as that player. It is a rules milestone: existing deathmatch golden *state* hashes are not allowed to move.
+- **Milestone 3.5 is the namesake mode, on programmer art, before M4.** Deathmatch stays the default and its golden *state* hashes did not move. Hen Grenade is five minutes, half the crates, one token, one hunted player who cannot bomb and moves at half speed, and the winner is whoever spent the most seconds as that player.

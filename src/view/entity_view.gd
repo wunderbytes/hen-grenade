@@ -29,6 +29,9 @@ const BOMB_COLOR: Color = Color8(24, 24, 28)
 ## Spawn protection blinks at this period, in ticks. 8 on / 8 off is fast enough
 ## to read as "protected" without being a strobe.
 const BLINK_PERIOD: int = 16
+const TOKEN_GOLD := Color8(212, 148, 28)
+const TOKEN_CHEVRON := Color8(92, 48, 8)
+const HEN_BODY_R: float = 9.0
 
 var state: MatchState = null
 
@@ -51,6 +54,7 @@ func _draw() -> void:
 	if state == null:
 		return
 	_draw_pickups()
+	_draw_hen_token()
 
 	var flames: Array[Rect2] = []
 	var flame_ages: PackedFloat32Array = PackedFloat32Array()
@@ -96,10 +100,19 @@ func _draw() -> void:
 		if p.spawn_protect_ticks > 0 and (p.spawn_protect_ticks % BLINK_PERIOD) < (BLINK_PERIOD / 2):
 			continue
 		shown.append(p)
+	var hunters: Array[PlayerState] = []
+	var hen: PlayerState = null
 	for p in shown:
+		if p.index == state.hen_slot:
+			hen = p
+		else:
+			hunters.append(p)
+	for p in hunters:
 		draw_rect(_body_rect(p), _player_color(p.index), true)
-	for p in shown:
+	for p in hunters:
 		draw_rect(_body_rect(p), Color.BLACK, false, 1.0)
+	if hen != null:
+		_draw_hen(hen)
 	for p in shown:
 		# Facing pip. Not decoration: with four identical squares on screen it is
 		# the only cue for which way a player is about to run.
@@ -129,6 +142,40 @@ func _draw_pickups() -> void:
 		var c: Vector2 = _tile_px(tiles[i])
 		var half: float = PickupArt.INNER[kinds[i]]
 		draw_rect(Rect2(c.x - half, c.y - half, half * 2.0, half * 2.0), PickupArt.COLORS[kinds[i]], true)
+
+## Gold disc plus a chevron — not a pickup, and not Jackpot's white square.
+func _draw_hen_token() -> void:
+	if not state.has_hen_token_on_floor():
+		return
+	var c: Vector2 = _tile_px(state.hen_token_tile)
+	draw_circle(c, 6.0, TOKEN_GOLD)
+	var chevron: PackedVector2Array = PackedVector2Array([
+		c + Vector2(0, -4),
+		c + Vector2(4, 3),
+		c + Vector2(1.5, 3),
+		c + Vector2(0, 0.5),
+		c + Vector2(-1.5, 3),
+		c + Vector2(-4, 3),
+	])
+	draw_colored_polygon(chevron, TOKEN_CHEVRON)
+
+## Larger oval plus a three-point comb, drawn after the hunter rects so the
+## hunter batch stays a rect pass (Appendix A.12). Slot colour stays on the
+## outline so P2-as-Hen is still blue.
+func _draw_hen(p: PlayerState) -> void:
+	var c: Vector2 = _pos_px(p.pos)
+	draw_circle(c, HEN_BODY_R, _player_color(p.index))
+	var comb: PackedVector2Array = PackedVector2Array([
+		c + Vector2(-6, -HEN_BODY_R + 2),
+		c + Vector2(-4, -HEN_BODY_R - 5),
+		c + Vector2(-2, -HEN_BODY_R + 1),
+		c + Vector2(0, -HEN_BODY_R - 6),
+		c + Vector2(2, -HEN_BODY_R + 1),
+		c + Vector2(4, -HEN_BODY_R - 5),
+		c + Vector2(6, -HEN_BODY_R + 2),
+	])
+	draw_colored_polygon(comb, _player_color(p.index))
+	draw_arc(c, HEN_BODY_R, 0.0, TAU, 16, Color.BLACK, 1.0)
 
 func _collect_flames(out_rects: Array[Rect2], out_ages: PackedFloat32Array) -> void:
 	var arena: Arena = state.arena

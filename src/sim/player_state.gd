@@ -52,6 +52,9 @@ var spawn_protect_ticks: int = 0
 var score: int = 0
 var kills: int = 0
 var deaths: int = 0
+## Ticks spent as the living Hen. Deathmatch never increments this; the
+## fingerprint only mixes a non-zero value so a deathmatch hash stays the M3 one.
+var hen_ticks: int = 0
 
 ## The own-bomb pass-off from game design §5.2: the tile of a bomb this player
 ## is currently standing on and may walk off. (-1, -1) for none. Cleared the
@@ -107,4 +110,7 @@ func mix_into(h: int) -> int:
 	acc = SimHash.mix_vec(acc, bomb_exempt_tile)
 	acc = SimHash.mix_bool(acc, prev_bomb)
 	acc = SimHash.mix_bool(acc, prev_action)
+	# Skip the zero default so deathmatch fingerprints stay byte-identical to M3.
+	if hen_ticks != 0:
+		acc = SimHash.mix_int(acc, hen_ticks)
 	return acc

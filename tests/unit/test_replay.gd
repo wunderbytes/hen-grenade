@@ -119,7 +119,7 @@ func test_golden_replays_reproduce_their_committed_fingerprints() -> void:
 
 		var balance: Balance = Balance.new()
 		var powerups: PowerupTable = PowerupTable.new()
-		assert_eq(replay.rules_fingerprint, Replay.rules_fingerprint_of(balance, powerups),
+		assert_eq(replay.rules_fingerprint, Replay.rules_fingerprint_of(balance, powerups, GameMode.deathmatch()),
 			"%s was recorded against different rules — regenerate it" % name)
 
 		var state: MatchState = replay.run(balance, powerups)
@@ -168,6 +168,40 @@ func test_the_golden_replays_exercise_the_m3_economy() -> void:
 	assert_gt(dropped, 0, "no power-up ever dropped — regenerate the golden replays")
 	assert_gt(taken, 0, "nobody collected a power-up — regenerate the golden replays")
 	assert_gt(regen, 0, "no crate regeneration wave landed — the only PRNG consumer M3 added is unpinned")
+
+func test_golden_03_is_a_hen_round_that_passes_the_token() -> void:
+	var replay: Replay = _golden("golden_03")
+	if replay == null:
+		return
+	var expected: PackedStringArray = _read_lines(_fingerprint_path("golden_03"))
+	assert_eq(expected.size(), 2, "golden_03 should hold a final fingerprint and a trace digest")
+	if expected.size() != 2:
+		return
+	var balance: Balance = Balance.new()
+	var powerups: PowerupTable = PowerupTable.new()
+	var hen: GameMode = GameMode.hen()
+	assert_eq(replay.rules_fingerprint, Replay.rules_fingerprint_of(balance, powerups, hen),
+		"golden_03 was recorded against different rules — regenerate it")
+	var state: MatchState = replay.run(balance, powerups, hen)
+	assert_eq(state.fingerprint(), expected[0], "golden_03 no longer reproduces its recorded end state")
+	assert_eq(replay.trace_digest, expected[1], "golden_03 diverged part-way through the round")
+
+	var collected: int = 0
+	var dropped: int = 0
+	var holders: Array[int] = []
+	state = replay.fresh_state(balance, powerups, hen)
+	for t in range(1, replay.tick_count() + 1):
+		for e in Sim.step(state, replay.frames_for(t)):
+			match e.kind:
+				SimEvent.Kind.HEN_COLLECTED:
+					collected += 1
+					if not holders.has(e.player):
+						holders.append(e.player)
+				SimEvent.Kind.HEN_DROPPED:
+					dropped += 1
+	assert_ge(collected, 2, "golden_03 never passed the token to a second player")
+	assert_ge(dropped, 1, "golden_03 never died as the Hen")
+	assert_ge(holders.size(), 2, "only one player ever collected the token")
 
 func _golden(name: String) -> Replay:
 	var replay: Replay = Replay.load_from("%s/%s.hgr" % [GOLDEN_DIR, name])

@@ -24,9 +24,9 @@ extends Node
 ## Menu-level buttons, which the simulation never sees. Deliberately not part of
 ## `InputFrame`: that is the replay format and what bots emit, and a pause the
 ## sim could observe would be a determinism bug waiting to happen.
-enum Menu { CONFIRM = 0, BACK = 1, START = 2, ADD_BOT = 3, REMOVE_BOT = 4 }
+enum Menu { CONFIRM = 0, BACK = 1, START = 2, ADD_BOT = 3, REMOVE_BOT = 4, PREV_MODE = 5, NEXT_MODE = 6 }
 
-const MENU_COUNT: int = 5
+const MENU_COUNT: int = 7
 
 ## Keyboard seats, in the order they are offered.
 const KB_LAYOUTS: Array[int] = [KeyboardSource.Layout.WASD, KeyboardSource.Layout.ARROWS]
@@ -201,12 +201,16 @@ func _update_menu() -> void:
 	_set_menu(Menu.START, Input.is_key_pressed(KEY_ESCAPE) or Input.is_key_pressed(KEY_ENTER) or Input.is_key_pressed(KEY_KP_ENTER))
 	_set_menu(Menu.ADD_BOT, Input.is_key_pressed(KEY_B))
 	_set_menu(Menu.REMOVE_BOT, Input.is_key_pressed(KEY_N))
+	_set_menu(Menu.PREV_MODE, Input.is_key_pressed(KEY_BRACKETLEFT))
+	_set_menu(Menu.NEXT_MODE, Input.is_key_pressed(KEY_BRACKETRIGHT))
 	for device_id in _pad_ids:
 		_set_menu(Menu.CONFIRM, Input.is_joy_button_pressed(device_id, JOY_BUTTON_A))
 		_set_menu(Menu.BACK, Input.is_joy_button_pressed(device_id, JOY_BUTTON_B) or Input.is_joy_button_pressed(device_id, JOY_BUTTON_BACK))
 		_set_menu(Menu.START, Input.is_joy_button_pressed(device_id, JOY_BUTTON_START))
 		_set_menu(Menu.ADD_BOT, Input.is_joy_button_pressed(device_id, JOY_BUTTON_Y))
 		_set_menu(Menu.REMOVE_BOT, Input.is_joy_button_pressed(device_id, JOY_BUTTON_X))
+		_set_menu(Menu.PREV_MODE, Input.is_joy_button_pressed(device_id, JOY_BUTTON_LEFT_SHOULDER))
+		_set_menu(Menu.NEXT_MODE, Input.is_joy_button_pressed(device_id, JOY_BUTTON_RIGHT_SHOULDER))
 	_menu_dir = _read_menu_dir()
 
 func _set_menu(action: Menu, pressed: bool) -> void:

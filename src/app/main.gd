@@ -25,7 +25,7 @@ func _ready() -> void:
 		_run_measure()
 		return
 	_add_label("HEN GRENADE", Vector2(C.VIEW_W / 2.0 - 70, C.VIEW_H / 2.0 - 24), 16, Color(0.95, 0.95, 0.9))
-	_add_label("M3 — power-ups, economy, match flow", Vector2(C.VIEW_W / 2.0 - 132, C.VIEW_H / 2.0 - 4), 8, Color(0.7, 0.8, 0.7))
+	_add_label("M3.5 — Hen Grenade", Vector2(C.VIEW_W / 2.0 - 70, C.VIEW_H / 2.0 - 4), 8, Color(0.7, 0.8, 0.7))
 	_add_label("pads join with A · keyboard with Space / Right Ctrl", Vector2(C.VIEW_W / 2.0 - 148, C.VIEW_H / 2.0 + 12), 8, Color(0.7, 0.75, 0.7))
 	_add_label("SPACE lobby   F2 stress   F3 sandbox", Vector2(C.VIEW_W / 2.0 - 112, C.VIEW_H / 2.0 + 30), 8, Color(0.6, 0.7, 0.6))
 	await get_tree().create_timer(TITLE_SECONDS).timeout
@@ -156,6 +156,13 @@ func _run_smoke() -> void:
 		# _process and _draw have not, and those are where M0's bugs lived.
 		for _i in range(SMOKE_TICKS):
 			await get_tree().physics_frame
+		if instance.has_method("smoke_select_mode"):
+			instance.call("smoke_select_mode", Session.MODE_HEN)
+			await get_tree().process_frame
+			await get_tree().process_frame
+			instance.call("smoke_select_mode", Session.MODE_DEATHMATCH)
+			await get_tree().process_frame
+			await get_tree().process_frame
 		if instance.has_method("smoke_step"):
 			instance.call("smoke_step", SMOKE_TICKS)
 		# The overlay's four modes each have a `_draw` and a pile of Labels that
@@ -167,7 +174,7 @@ func _run_smoke() -> void:
 		for method in [
 				"smoke_overlay_menu", "smoke_overlay_reconnect",
 				"smoke_overlay_scoreboard", "smoke_overlay_match_result",
-				"smoke_overlay_hide",
+				"smoke_overlay_hen_scoreboard", "smoke_overlay_hide",
 			]:
 			if instance.has_method(method):
 				instance.call(method)

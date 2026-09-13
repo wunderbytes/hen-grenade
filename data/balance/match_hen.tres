@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="MatchRules" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/app/match_rules.gd" id="1_match"]
+
+[resource]
+script = ExtResource("1_match")
+round_wins_to_take_match = 1
+max_rounds = 1
+scoreboard_ticks = 240

@@ -63,6 +63,8 @@ static func tile_of(pos: Vector2i) -> Vector2i:
 # what keeps a cursed player's kit loss on death honest (M3 brief §4.4).
 
 static func _speed_of(state: MatchState, p: PlayerState) -> int:
+	if p.index == state.hen_slot and p.alive:
+		return state.mode.hen_speed_units
 	if p.has_curse() and p.curse == Powerup.Curse.FAST:
 		return state.balance.max_speed_units
 	return p.speed_units
@@ -116,6 +118,7 @@ static func step(state: MatchState, inputs: Array[InputFrame]) -> Array[SimEvent
 
 	_tick_bombs(state, events, remote_fire)
 	_resolve_deaths(state, events)
+	_tick_hen(state)
 	_tick_respawns(state, events)
 	_tick_spawn_protection(state)
 	_tick_curses(state, events)
@@ -192,12 +195,15 @@ static func _player_actions(state: MatchState, p: PlayerState, frame: InputFrame
 	if action_edge:
 		_use_ability(state, p, events, remote_fire)
 	_collect_pickup(state, p, events)
+	_collect_hen_token(state, p, events)
 	# The own-bomb exemption is released the first tick the player's centre
 	# leaves the tile, which is what makes the pass-off one-way.
 	if p.has_bomb_exemption() and p.tile() != p.bomb_exempt_tile:
 		p.clear_bomb_exemption()
 
 static func _try_place_bomb(state: MatchState, p: PlayerState, events: Array[SimEvent]) -> void:
+	if p.index == state.hen_slot:
+		return
 	if p.bombs_active >= p.bomb_capacity:
 		return
 	var t: Vector2i = p.tile()
@@ -375,6 +381,8 @@ static func _can_hold_bomb(state: MatchState, t: Vector2i) -> bool:
 ## The action button, which does exactly one thing because a player has exactly
 ## one ability (M3 brief §4.3). Kick is not here: it has no button.
 static func _use_ability(state: MatchState, p: PlayerState, events: Array[SimEvent], remote_fire: PackedByteArray) -> void:
+	if p.index == state.hen_slot:
+		return
 	match p.ability:
 		Powerup.Kind.REMOTE:
 			remote_fire[p.index] = 1
@@ -479,6 +487,21 @@ static func _collect_pickup(state: MatchState, p: PlayerState, events: Array[Sim
 	state.clear_pickup(t)
 	events.append(SimEvent.pickup_taken(t, p.index, kind, curse))
 	_apply_pickup(state, p, kind, curse, t, events)
+
+## Walking onto the token collects it. Slot order is the tie-break because
+## player 0 is already processed first. Does not clear kit, curses, or spawn
+## protection. Re-arms leftover Remote bombs so a hunter who just became prey
+## cannot leave a fuse-less wall behind.
+static func _collect_hen_token(state: MatchState, p: PlayerState, events: Array[SimEvent]) -> void:
+	if not state.has_hen_token_on_floor():
+		return
+	var t: Vector2i = p.tile()
+	if t != state.hen_token_tile:
+		return
+	state.hen_slot = p.index
+	state.hen_token_tile = Vector2i(-1, -1)
+	_arm_orphaned_bombs(state, p.index)
+	events.append(SimEvent.hen_collected(t, p.index))
 
 ## Applies one power-up. **A power-up already at its cap is still consumed**
 ## (M3 brief §3.1): leaving it on the floor would be kinder and is the wrong
@@ -662,7 +685,48 @@ static func _resolve_deaths(state: MatchState, events: Array[SimEvent]) -> void:
 			state.players[killer].score += 1
 			state.players[killer].kills += 1
 		events.append(SimEvent.player_died(t, p.index, killer))
+		if state.hen_slot == p.index:
+			_drop_hen_token(state, p, t, events)
 		_lose_kit(state, p, t, events)
+
+## Drops the token on the nearest legal floor, consuming no draws — the same
+## ordered search as kit-loss scatter. Prefers a tile that is not on fire; if
+## every candidate is burning, still places on the nearest floor. The token
+## cannot be destroyed by a blast.
+static func _drop_hen_token(state: MatchState, p: PlayerState, died_at: Vector2i, events: Array[SimEvent]) -> void:
+	state.hen_slot = -1
+	var tile: Vector2i = _choose_token_drop_tile(state, died_at)
+	state.hen_token_tile = tile
+	events.append(SimEvent.hen_dropped(tile, p.index))
+
+static func _choose_token_drop_tile(state: MatchState, from: Vector2i) -> Vector2i:
+	var ranked: Array[Vector2i] = _scatter_candidates(state, from)
+	var best_floor: Vector2i = Vector2i(-1, -1)
+	for t in ranked:
+		if not state.arena.in_bounds(t):
+			continue
+		if state.arena.at(t) != Arena.Tile.FLOOR:
+			continue
+		if state.bomb_index_at(t) >= 0:
+			continue
+		if state.has_pickup_at(t):
+			continue
+		if best_floor.x < 0:
+			best_floor = t
+		if state.flame_ttl_at(t) <= 0:
+			return t
+	if best_floor.x >= 0:
+		return best_floor
+	return from
+
+## Alive-after-deaths is the definition of "was the Hen this tick." The death
+## tick does not pay; a body coming back this tick cannot be the Hen.
+static func _tick_hen(state: MatchState) -> void:
+	if state.hen_slot < 0 or state.hen_slot >= state.players.size():
+		return
+	var p: PlayerState = state.players[state.hen_slot]
+	if p.active and p.alive:
+		p.hen_ticks += 1
 
 ## Kit loss on death (game design §6.1, M3 brief §4.5). The most important
 ## balance dial in the game, and therefore one number: `kit_loss_permille`.
@@ -757,6 +821,8 @@ static func _can_hold_pickup(state: MatchState, t: Vector2i) -> bool:
 	if state.arena.at(t) != Arena.Tile.FLOOR:
 		return false
 	if state.has_pickup_at(t):
+		return false
+	if t == state.hen_token_tile:
 		return false
 	if state.flame_ttl_at(t) > 0:
 		return false
@@ -855,6 +921,8 @@ static func _regen_candidates(state: MatchState) -> Array[Vector2i]:
 			if state.bomb_index_at(t) >= 0:
 				continue
 			if state.has_pickup_at(t):
+				continue
+			if t == state.hen_token_tile:
 				continue
 			if _near_living_player(state, t):
 				continue

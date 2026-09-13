@@ -53,22 +53,33 @@ var pickup_data: PackedByteArray = PackedByteArray()
 ## same PRNG in a fixed order (technical design §3a).
 var regen_ticks_left: int = 0
 
+## Never null: create() substitutes deathmatch when the caller passes nothing.
+var mode: GameMode = null
+## -1 when nobody is the Hen. At most one living holder.
+var hen_slot: int = -1
+## Floor cell holding the token, or (-1, -1) while held or absent.
+var hen_token_tile: Vector2i = Vector2i(-1, -1)
+## Density actually handed to Arena.generate (mode scale applied). Stored in
+## the replay header so a hen-mode .hgr is self-describing.
+var effective_crate_permille: int = 0
+
 ## Builds a round. `active_slots` is one bool per player slot; inactive slots
 ## keep their array position (so indices stay stable everywhere) but are skipped
 ## by every rule.
 ##
-## `p_powerups` is optional so the sim tests and the golden replay generator can
-## keep saying `create(balance, def, seed, active)`; a null table becomes the
-## shipped defaults, never a round with no economy in it.
-static func create(p_balance: Balance, p_arena_def: ArenaDef, p_seed: int, active_slots: Array[bool], p_powerups: PowerupTable = null) -> MatchState:
+## `p_powerups` and `p_mode` are optional so existing tests keep saying
+## `create(balance, def, seed, active)` and keep meaning deathmatch.
+static func create(p_balance: Balance, p_arena_def: ArenaDef, p_seed: int, active_slots: Array[bool], p_powerups: PowerupTable = null, p_mode: GameMode = null) -> MatchState:
 	var state: MatchState = MatchState.new()
 	state.balance = p_balance
 	state.arena_def = p_arena_def
 	state.powerups = p_powerups if p_powerups != null else PowerupTable.new()
+	state.mode = p_mode if p_mode != null else GameMode.deathmatch()
 	state.rng_seed = p_seed
 	state.rng = SimRng.new(p_seed)
-	state.arena = Arena.generate(p_arena_def, state.rng)
-	state.round_ticks_left = p_balance.round_ticks
+	state.effective_crate_permille = state.mode.effective_crate_permille(p_arena_def)
+	state.arena = Arena.generate(p_arena_def, state.rng, state.effective_crate_permille)
+	state.round_ticks_left = state.mode.effective_round_ticks(p_balance)
 	state.regen_ticks_left = p_balance.crate_regen_ticks
 
 	var cells: int = state.arena.w * state.arena.h
@@ -99,6 +110,9 @@ static func create(p_balance: Balance, p_arena_def: ArenaDef, p_seed: int, activ
 			# against and a blinking player would only be noise.
 			p.spawn_protect_ticks = 0
 		state.players.append(p)
+
+	if state.mode.is_hen():
+		_place_hen_token(state)
 
 	return state
 
@@ -157,9 +171,11 @@ func pickup_count() -> int:
 			n += 1
 	return n
 
-## Ceiling on total crates, from `crate_cap_permille` of the eligible interior.
+## Ceiling on total crates, from the mode's cap when it overrides, otherwise
+## from `crate_cap_permille` of the eligible interior.
 func crate_cap() -> int:
-	return arena.eligible_interior_count() * balance.crate_cap_permille / 1000
+	var permille: int = mode.effective_crate_cap_permille(balance) if mode != null else balance.crate_cap_permille
+	return arena.eligible_interior_count() * permille / 1000
 
 ## Index into `bombs` of the live bomb on `t`, or -1. Linear, and that is fine:
 ## there are at most 32 bombs on the board and a scan of a small array beats a
@@ -197,20 +213,29 @@ func active_count() -> int:
 			n += 1
 	return n
 
-## Winning slot index, or -1 for a draw. Highest score takes the round; an equal
-## top score is a draw and nobody takes it (game design §5.3).
+func has_hen_token_on_floor() -> bool:
+	return hen_token_tile.x >= 0
+
+func is_hen(player_index: int) -> bool:
+	return hen_slot == player_index
+
+## Winning slot index, or -1 for a draw. Deathmatch is unique-highest `score`;
+## Hen Grenade is unique-highest `hen_ticks`. Kill score is still recorded in
+## hen mode and does not decide the round.
 func winner() -> int:
 	var best: int = 0
 	var best_slot: int = -1
 	var tied: bool = false
+	var by_hen: bool = mode != null and mode.scoring == GameMode.Scoring.HEN_TICKS
 	for p in players:
 		if not p.active:
 			continue
-		if best_slot == -1 or p.score > best:
-			best = p.score
+		var value: int = p.hen_ticks if by_hen else p.score
+		if best_slot == -1 or value > best:
+			best = value
 			best_slot = p.index
 			tied = false
-		elif p.score == best:
+		elif value == best:
 			tied = true
 	return -1 if tied else best_slot
 
@@ -247,4 +272,36 @@ func fingerprint() -> String:
 	h = SimHash.mix_int(h, bombs.size())
 	for b in bombs:
 		h = b.mix_into(h)
+	# Default-empty hen fields are not mixed, so a deathmatch fingerprint is
+	# still the M3 hash. A hen round always has a token tile or a holder.
+	if hen_slot >= 0:
+		h = SimHash.mix_int(h, hen_slot)
+	if hen_token_tile.x >= 0:
+		h = SimHash.mix_vec(h, hen_token_tile)
 	return SimHash.to_hex(h)
+
+## One `next_index` into the filtered candidate list. Deathmatch never calls
+## this (Rule C). Zero candidates is pathological: leave the token absent.
+static func _place_hen_token(state: MatchState) -> void:
+	var candidates: Array[Vector2i] = []
+	for y in range(state.arena.h):
+		for x in range(state.arena.w):
+			var t: Vector2i = Vector2i(x, y)
+			if state.arena.at(t) != Arena.Tile.FLOOR:
+				continue
+			if state.arena.is_lattice_pillar(t):
+				continue
+			var occupied: bool = false
+			for p in state.players:
+				if p.active and p.alive and p.tile() == t:
+					occupied = true
+					break
+			if occupied:
+				continue
+			candidates.append(t)
+	state.hen_slot = -1
+	if candidates.is_empty():
+		state.hen_token_tile = Vector2i(-1, -1)
+		return
+	var pick: int = state.rng.next_index(candidates.size())
+	state.hen_token_tile = candidates[pick]

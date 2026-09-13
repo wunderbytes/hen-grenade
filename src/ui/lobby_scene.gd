@@ -23,12 +23,21 @@ const CARD_Y: int = 80
 ## Centres the row of four: 4 * 140 + 3 * 12 = 596 in a 640-wide viewport.
 const CARD_X0: int = (C.VIEW_W - (C.MAX_PLAYERS * CARD_W + (C.MAX_PLAYERS - 1) * CARD_GAP)) / 2
 
+const CHIP_W: int = 132
+const CHIP_H: int = 18
+const CHIP_GAP: int = 12
+const CHIP_Y: int = 38
+const CHIP_X0: int = (C.VIEW_W - (2 * CHIP_W + CHIP_GAP)) / 2
+const CHIP_ON := Color(0.95, 0.95, 0.9)
+const CHIP_OFF := Color(0.38, 0.42, 0.38)
+const CHIP_FILL := Color(0.18, 0.19, 0.16, 0.85)
 const EMPTY_FILL := Color(0.07, 0.08, 0.10)
 const EMPTY_EDGE := Color(0.28, 0.30, 0.32)
 const CARD_FILL_ALPHA: float = 0.22
 
 var _cards_header: Array[Label] = []
 var _cards_body: Array[Label] = []
+var _chip_labels: Array[Label] = []
 var _status: Label = null
 var _metrics: Node = null
 
@@ -38,10 +47,13 @@ func _ready() -> void:
 	DeviceManager.enter_lobby()
 	DeviceManager.roster_changed.connect(_on_roster_changed)
 
-	var title: Label = _add_label(Vector2(C.VIEW_W / 2.0 - 70, 14), 16, Color(0.95, 0.95, 0.9), true)
+	var title: Label = _add_label(Vector2(C.VIEW_W / 2.0 - 70, 10), 16, Color(0.95, 0.95, 0.9), true)
 	title.text = "HEN GRENADE"
-	var subtitle: Label = _add_label(Vector2(C.VIEW_W / 2.0 - 44, 40), 8, Color(0.70, 0.80, 0.70), false)
-	subtitle.text = "press A to join"
+
+	_chip_labels.append(_add_label(Vector2(CHIP_X0 + 18, CHIP_Y + 4), 8, CHIP_ON, false))
+	_chip_labels.append(_add_label(Vector2(CHIP_X0 + CHIP_W + CHIP_GAP + 14, CHIP_Y + 4), 8, CHIP_OFF, false))
+	_chip_labels[0].text = "DEATHMATCH"
+	_chip_labels[1].text = "HEN GRENADE"
 
 	for i in range(C.MAX_PLAYERS):
 		var origin: Vector2 = _card_rect(i).position
@@ -51,9 +63,9 @@ func _ready() -> void:
 	_status = _add_label(Vector2(C.VIEW_W / 2.0 - 80, 196), 10, Color(0.95, 0.95, 0.9), false)
 
 	var pad_help: Label = _add_label(Vector2(24, 222), 8, Color(0.62, 0.70, 0.62), false)
-	pad_help.text = "A join    B leave    Y add bot    X drop bot    START begin"
+	pad_help.text = "A join    B leave    Y add bot    X drop bot    LB/RB mode    START begin"
 	var kb_help: Label = _add_label(Vector2(24, 236), 8, Color(0.52, 0.58, 0.52), false)
-	kb_help.text = "keyboard: SPACE / RIGHT CTRL join, Q / slash leave, B / N bots, ENTER begin"
+	kb_help.text = "keyboard: SPACE / RIGHT CTRL join, Q / slash leave, B / N bots, [ ] mode, ENTER begin"
 
 	var legend: PowerupLegend = PowerupLegend.new()
 	legend.compact = false
@@ -76,6 +88,12 @@ func _physics_process(_delta: float) -> void:
 		DeviceManager.add_bot()
 	if DeviceManager.menu_pressed(DeviceManager.Menu.REMOVE_BOT):
 		DeviceManager.remove_last_bot()
+	if DeviceManager.menu_pressed(DeviceManager.Menu.PREV_MODE):
+		Session.cycle(-1)
+		_refresh()
+	if DeviceManager.menu_pressed(DeviceManager.Menu.NEXT_MODE):
+		Session.cycle(1)
+		_refresh()
 	# START only: the lobby deliberately never reads CONFIRM, because Space is the
 	# WASD seat's join key and a third player sitting down must not also start
 	# the match out from under the two already seated.
@@ -117,13 +135,28 @@ func _refresh() -> void:
 	else:
 		_status.text = "   %d of %d minimum players" % [n, C.MIN_PLAYERS]
 		_status.add_theme_color_override("font_color", Color(0.85, 0.75, 0.55))
+	_refresh_chips()
 	queue_redraw()
+
+func _refresh_chips() -> void:
+	var hen: bool = Session.is_hen()
+	_chip_labels[0].add_theme_color_override("font_color", CHIP_OFF if hen else CHIP_ON)
+	_chip_labels[1].add_theme_color_override("font_color", CHIP_ON if hen else CHIP_OFF)
+
+func smoke_select_mode(id: String) -> void:
+	Session.mode_id = id
+	_refresh()
 
 # --- Drawing -----------------------------------------------------------------
 
 ## Fills in one pass, then edges in another. Interleaving them per card would
 ## break the renderer's batching for the sake of nothing (Appendix A.12).
 func _draw() -> void:
+	var hen: bool = Session.is_hen()
+	draw_rect(_chip_rect(0), CHIP_FILL if not hen else Color(CHIP_FILL, 0.35), true)
+	draw_rect(_chip_rect(1), CHIP_FILL if hen else Color(CHIP_FILL, 0.35), true)
+	draw_rect(_chip_rect(0), CHIP_ON if not hen else CHIP_OFF, false, 1.0)
+	draw_rect(_chip_rect(1), CHIP_ON if hen else CHIP_OFF, false, 1.0)
 	for i in range(C.MAX_PLAYERS):
 		var slot: PlayerSlot = DeviceManager.slots[i]
 		var fill: Color = EMPTY_FILL
@@ -134,6 +167,9 @@ func _draw() -> void:
 	for i in range(C.MAX_PLAYERS):
 		var occupied: bool = DeviceManager.slots[i].is_occupied()
 		draw_rect(_card_rect(i), C.PLAYER_COLORS[i] if occupied else EMPTY_EDGE, false, 1.0)
+
+func _chip_rect(i: int) -> Rect2:
+	return Rect2(CHIP_X0 + i * (CHIP_W + CHIP_GAP), CHIP_Y, CHIP_W, CHIP_H)
 
 func _card_rect(i: int) -> Rect2:
 	return Rect2(CARD_X0 + i * (CARD_W + CARD_GAP), CARD_Y, CARD_W, CARD_H)

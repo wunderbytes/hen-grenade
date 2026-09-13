@@ -73,6 +73,9 @@ func show_reconnect(slot_indices: Array[int]) -> void:
 ## The seed is on here because game design §4 promises it — "a good layout can be
 ## replayed" — and this is the only screen with room to say it.
 func show_scoreboard(state: MatchState, record: MatchRecord, seconds_left: int) -> void:
+	if state.mode != null and state.mode.is_hen():
+		_show_hen_scoreboard(state, record, seconds_left)
+		return
 	var title: String = "ROUND %d — " % record.rounds_played()
 	var round_winner: int = record.round_winners[record.rounds_played() - 1] if record.rounds_played() > 0 else -1
 	title += "DRAW" if round_winner < 0 else "PLAYER %d" % (round_winner + 1)
@@ -92,16 +95,34 @@ func show_scoreboard(state: MatchState, record: MatchRecord, seconds_left: int) 
 	colors.append(DIM_TEXT_COLOR)
 	_show(title, lines, colors, "next round in %d …   A to skip" % maxi(0, seconds_left))
 
+func _show_hen_scoreboard(state: MatchState, record: MatchRecord, seconds_left: int) -> void:
+	var title: String = "%s  seed %d" % [state.mode.display_name, state.rng_seed]
+	var lines: PackedStringArray = PackedStringArray()
+	var colors: Array[Color] = []
+	for p in state.players:
+		if not p.active:
+			continue
+		lines.append("P%d   %ds   %dk / %dd" % [
+			p.index + 1, p.hen_ticks / C.TICK_HZ, p.kills, p.deaths
+		])
+		colors.append(C.PLAYER_COLORS[p.index])
+	_show(title, lines, colors, "A to skip   ·   %ds" % maxi(0, seconds_left))
+
 ## The winner screen. `record.winner()` is -1 for a match nobody could win, which
 ## after seven rounds is an honest outcome rather than an error.
-func show_match_result(record: MatchRecord) -> void:
+func show_match_result(record: MatchRecord, state: MatchState = null) -> void:
 	var winner: int = record.winner()
 	var lines: PackedStringArray = PackedStringArray()
 	var colors: Array[Color] = []
+	var hen: bool = state != null and state.mode != null and state.mode.is_hen()
 	for slot in range(C.MAX_PLAYERS):
 		if record.active[slot] == 0:
 			continue
-		lines.append("P%d   %d round win(s)   %d pts" % [slot + 1, record.wins_of(slot), record.total_score[slot]])
+		if hen:
+			var ticks: int = record.total_score[slot]
+			lines.append("P%d   %ds" % [slot + 1, ticks / C.TICK_HZ])
+		else:
+			lines.append("P%d   %d round win(s)   %d pts" % [slot + 1, record.wins_of(slot), record.total_score[slot]])
 		colors.append(C.PLAYER_COLORS[slot])
 	var title: String = "MATCH DRAWN" if winner < 0 else "PLAYER %d WINS THE MATCH" % (winner + 1)
 	_show(title, lines, colors, "A rematch   ·   B quit to lobby")

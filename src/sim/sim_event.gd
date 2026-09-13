@@ -29,6 +29,9 @@ enum Kind {
 	BOMB_TOSSED,
 	CURSE_APPLIED,
 	CURSE_EXPIRED,
+	# --- M3.5 ---
+	HEN_COLLECTED,
+	HEN_DROPPED,
 }
 
 var kind: Kind = Kind.FLAME_LIT
@@ -127,6 +130,16 @@ static func curse_applied(tile: Vector2i, player: int, curse: int, ticks: int) -
 ## `player`'s curse ran out. `value` is the variant that ended.
 static func curse_expired(player: int, curse: int) -> SimEvent:
 	return _make(Kind.CURSE_EXPIRED, Vector2i.ZERO, player, -1, curse)
+
+# --- M3.5 -------------------------------------------------------------------
+
+## `player` collected the Hen token on `tile`.
+static func hen_collected(tile: Vector2i, player: int) -> SimEvent:
+	return _make(Kind.HEN_COLLECTED, tile, player, -1, 0)
+
+## `player` died as the Hen and dropped the token onto `tile`.
+static func hen_dropped(tile: Vector2i, player: int) -> SimEvent:
+	return _make(Kind.HEN_DROPPED, tile, player, -1, 0)
 
 func _to_string() -> String:
 	return "SimEvent(%s tile=%s player=%d other=%d value=%d)" % [Kind.keys()[kind], str(tile), player, other, value]

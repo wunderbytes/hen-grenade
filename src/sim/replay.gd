@@ -32,10 +32,10 @@ const MAGIC: String = "HGR1"
 const EXTENSION: String = "hgr"
 
 var rng_seed: int = 0
-## The rules this was recorded against: Balance mixed with PowerupTable. Playing
-## a replay back against retuned rules is a loud mismatch rather than a desync
-## nobody can explain — and a re-weighted drop table changes a round just as
-## surely as a retuned fuse does (M3 brief §7).
+## The rules this was recorded against: Balance mixed with PowerupTable and
+## GameMode. Playing a replay back against retuned rules is a loud mismatch
+## rather than a desync nobody can explain. Magic stays HGR1: the byte layout
+## is unchanged; what changed is what goes into the u32 at offset 8.
 var rules_fingerprint: int = 0
 var grid_w: int = C.GRID_W
 var grid_h: int = C.GRID_H
@@ -45,20 +45,23 @@ var player_count: int = 0
 ## Packed InputFrames, C.MAX_PLAYERS bytes per tick.
 var rows: PackedByteArray = PackedByteArray()
 
-## The one place the two rule resources are combined into the number a replay
+## The one place the three rule resources are combined into the number a replay
 ## stores, so recording and playback cannot disagree about what "the rules" are.
-static func rules_fingerprint_of(balance: Balance, powerups: PowerupTable) -> int:
+## MatchRules stays out of this mix: scoreboard duration is not a sim input.
+static func rules_fingerprint_of(balance: Balance, powerups: PowerupTable = null, mode: GameMode = null) -> int:
 	var h: int = SimHash.mix_int(SimHash.start(), balance.fingerprint())
 	var table: PowerupTable = powerups if powerups != null else PowerupTable.new()
-	return SimHash.mix_int(h, table.fingerprint())
+	h = SimHash.mix_int(h, table.fingerprint())
+	var play_mode: GameMode = mode if mode != null else GameMode.deathmatch()
+	return SimHash.mix_int(h, play_mode.fingerprint())
 
 static func for_state(state: MatchState) -> Replay:
 	var r: Replay = Replay.new()
 	r.rng_seed = state.rng_seed
-	r.rules_fingerprint = rules_fingerprint_of(state.balance, state.powerups)
+	r.rules_fingerprint = rules_fingerprint_of(state.balance, state.powerups, state.mode)
 	r.grid_w = state.arena_def.grid_w
 	r.grid_h = state.arena_def.grid_h
-	r.crate_permille = state.arena_def.crate_permille
+	r.crate_permille = state.effective_crate_permille
 	r.player_count = state.active_count()
 	return r
 
@@ -166,17 +169,24 @@ const TRACE_INTERVAL: int = 60
 ## what notices.
 var trace_digest: String = ""
 
-func fresh_state(balance: Balance, powerups: PowerupTable = null) -> MatchState:
+func fresh_state(balance: Balance, powerups: PowerupTable = null, mode: GameMode = null) -> MatchState:
 	var active: Array[bool] = []
 	for i in range(C.MAX_PLAYERS):
 		active.append(i < player_count)
-	return MatchState.create(balance, arena_def(), rng_seed, active, powerups)
+	# crate_permille in this file is the density that was generated, so create()
+	# must not scale it again. The mode still supplies clock, cap, speed and
+	# scoring.
+	var play_mode: GameMode = mode if mode != null else GameMode.deathmatch()
+	if play_mode.crate_scale_permille != 1000:
+		play_mode = play_mode.duplicate() as GameMode
+		play_mode.crate_scale_permille = 1000
+	return MatchState.create(balance, arena_def(), rng_seed, active, powerups, play_mode)
 
 ## Replays this log against a fresh MatchState and returns the final state,
 ## leaving `trace_digest` set. The determinism harness: the caller compares both
 ## the final fingerprint and the trace against committed values.
-func run(balance: Balance, powerups: PowerupTable = null) -> MatchState:
-	var state: MatchState = fresh_state(balance, powerups)
+func run(balance: Balance, powerups: PowerupTable = null, mode: GameMode = null) -> MatchState:
+	var state: MatchState = fresh_state(balance, powerups, mode)
 	var trace: int = SimHash.start()
 	var total: int = tick_count()
 	for t in range(1, total + 1):
