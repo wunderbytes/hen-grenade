@@ -20,24 +20,46 @@ static func arena_def(crate_permille: int = 0) -> ArenaDef:
 	def.crate_permille = crate_permille
 	return def
 
+## A table that never drops anything, so a test about blast geometry is not
+## accidentally a test about power-ups.
+static func no_drops() -> PowerupTable:
+	var table: PowerupTable = PowerupTable.new()
+	table.drop_permille = 0
+	return table
+
+## A table that drops `kind` from every crate, and nothing else. Makes a drop
+## test about the rule rather than about the seed.
+static func always_drops(kind: int) -> PowerupTable:
+	var table: PowerupTable = PowerupTable.new()
+	table.drop_permille = 1000
+	table.weight_bomb = 1 if kind == Powerup.Kind.BOMB else 0
+	table.weight_blast = 1 if kind == Powerup.Kind.BLAST else 0
+	table.weight_speed = 1 if kind == Powerup.Kind.SPEED else 0
+	table.weight_kick = 1 if kind == Powerup.Kind.KICK else 0
+	table.weight_toss = 1 if kind == Powerup.Kind.TOSS else 0
+	table.weight_remote = 1 if kind == Powerup.Kind.REMOTE else 0
+	table.weight_jackpot = 1 if kind == Powerup.Kind.JACKPOT else 0
+	table.weight_dud = 1 if kind == Powerup.Kind.DUD else 0
+	return table
+
 ## A state on a completely empty arena (border only), with `player_count` slots
 ## active and sitting on their spawn tiles.
-static func open_state(p_balance: Balance = null, player_count: int = 2, p_seed: int = 12345) -> MatchState:
+static func open_state(p_balance: Balance = null, player_count: int = 2, p_seed: int = 12345, p_powerups: PowerupTable = null) -> MatchState:
 	var bal: Balance = p_balance if p_balance != null else balance()
 	var active: Array[bool] = []
 	for i in range(C.MAX_PLAYERS):
 		active.append(i < player_count)
-	var state: MatchState = MatchState.create(bal, arena_def(0), p_seed, active)
+	var state: MatchState = MatchState.create(bal, arena_def(0), p_seed, active, p_powerups)
 	clear_interior(state.arena)
 	return state
 
 ## A state on a normally generated arena — crates, pillars and all.
-static func generated_state(p_balance: Balance = null, player_count: int = 2, p_seed: int = 12345) -> MatchState:
+static func generated_state(p_balance: Balance = null, player_count: int = 2, p_seed: int = 12345, p_powerups: PowerupTable = null) -> MatchState:
 	var bal: Balance = p_balance if p_balance != null else balance()
 	var active: Array[bool] = []
 	for i in range(C.MAX_PLAYERS):
 		active.append(i < player_count)
-	return MatchState.create(bal, arena_def(700), p_seed, active)
+	return MatchState.create(bal, arena_def(700), p_seed, active, p_powerups)
 
 static func clear_interior(arena: Arena) -> void:
 	for y in range(1, arena.h - 1):
@@ -72,6 +94,37 @@ static func add_bomb(state: MatchState, tile: Vector2i, owner: int, fuse: int, r
 	if owner >= 0 and owner < state.players.size():
 		state.players[owner].bombs_active += 1
 	return b
+
+## Lights a flame directly, for tests about what fire does rather than about
+## where it came from.
+static func add_flame(state: MatchState, tile: Vector2i, owner: int, ttl: int = 24) -> void:
+	var i: int = state.arena.index(tile)
+	state.flame_ttl[i] = ttl
+	state.flame_owner[i] = owner
+
+## Puts a pickup on a tile directly, so a collection test does not have to break
+## a crate and hope.
+static func add_pickup(state: MatchState, tile: Vector2i, kind: int, curse: int = 0) -> void:
+	state.set_pickup(tile, kind, curse)
+
+## Every tile currently holding a pickup, in index order.
+static func pickup_tiles(state: MatchState) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for i in range(state.pickup_kind.size()):
+		if state.pickup_kind[i] != Powerup.Kind.NONE:
+			out.append(Vector2i(i % state.arena.w, i / state.arena.w))
+	return out
+
+## The Powerup.Kinds on the board, sorted, so a scatter test can compare sets
+## without depending on tile order.
+static func pickup_kinds(state: MatchState) -> Array[int]:
+	var out: Array[int] = []
+	for i in range(state.pickup_kind.size()):
+		var kind: int = state.pickup_kind[i]
+		if kind != Powerup.Kind.NONE:
+			out.append(kind)
+	out.sort()
+	return out
 
 # --- Input ------------------------------------------------------------------
 

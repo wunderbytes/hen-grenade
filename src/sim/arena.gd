@@ -44,6 +44,18 @@ func is_solid(t: Vector2i) -> bool:
 	var tile: int = at(t)
 	return tile == Tile.HARD or tile == Tile.CRATE
 
+## Interior tiles that are not lattice pillars — the tiles a crate could ever
+## occupy. 233 on a 25 x 15 grid. The crate cap is a permille of this rather than
+## an absolute count, so changing the grid size does not silently change the
+## regeneration ceiling (M3 brief §5).
+func eligible_interior_count() -> int:
+	var n: int = 0
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			if not is_lattice_pillar(Vector2i(x, y)):
+				n += 1
+	return n
+
 func count_of(value: int) -> int:
 	var n: int = 0
 	for i in range(tiles.size()):

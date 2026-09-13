@@ -14,21 +14,29 @@ class_name Replay
 ## File format (little-endian, as Godot's FileAccess writes):
 ##   "HGR1"  4 bytes magic
 ##   u32     seed
-##   u32     balance fingerprint
+##   u32     rules fingerprint
 ##   u16     grid_w
 ##   u16     grid_h
 ##   u16     crate_permille
 ##   u8      player_count
 ##   u32     tick_count
 ##   tick_count * C.MAX_PLAYERS bytes, slot-major within each tick
+##
+## The magic stays `HGR1` through M3. The byte layout and the input encoding are
+## unchanged — what changed is what goes *into* the u32 at offset 8, which was
+## `Balance.fingerprint()` and is now that mixed with the power-up table's. An
+## M1-era replay therefore reports a rules mismatch, which is exactly what it
+## should do: M3 retuned the rules and the round it recorded no longer exists.
 
 const MAGIC: String = "HGR1"
 const EXTENSION: String = "hgr"
 
 var rng_seed: int = 0
-## Balance.fingerprint() at record time. Playing a replay back against retuned
-## balance is a loud mismatch rather than a desync nobody can explain.
-var balance_fingerprint: int = 0
+## The rules this was recorded against: Balance mixed with PowerupTable. Playing
+## a replay back against retuned rules is a loud mismatch rather than a desync
+## nobody can explain — and a re-weighted drop table changes a round just as
+## surely as a retuned fuse does (M3 brief §7).
+var rules_fingerprint: int = 0
 var grid_w: int = C.GRID_W
 var grid_h: int = C.GRID_H
 var crate_permille: int = 700
@@ -37,10 +45,17 @@ var player_count: int = 0
 ## Packed InputFrames, C.MAX_PLAYERS bytes per tick.
 var rows: PackedByteArray = PackedByteArray()
 
+## The one place the two rule resources are combined into the number a replay
+## stores, so recording and playback cannot disagree about what "the rules" are.
+static func rules_fingerprint_of(balance: Balance, powerups: PowerupTable) -> int:
+	var h: int = SimHash.mix_int(SimHash.start(), balance.fingerprint())
+	var table: PowerupTable = powerups if powerups != null else PowerupTable.new()
+	return SimHash.mix_int(h, table.fingerprint())
+
 static func for_state(state: MatchState) -> Replay:
 	var r: Replay = Replay.new()
 	r.rng_seed = state.rng_seed
-	r.balance_fingerprint = state.balance.fingerprint()
+	r.rules_fingerprint = rules_fingerprint_of(state.balance, state.powerups)
 	r.grid_w = state.arena_def.grid_w
 	r.grid_h = state.arena_def.grid_h
 	r.crate_permille = state.arena_def.crate_permille
@@ -99,7 +114,7 @@ func save(path: String) -> Error:
 		return FileAccess.get_open_error()
 	f.store_buffer(MAGIC.to_ascii_buffer())
 	f.store_32(rng_seed)
-	f.store_32(balance_fingerprint)
+	f.store_32(rules_fingerprint)
 	f.store_16(grid_w)
 	f.store_16(grid_h)
 	f.store_16(crate_permille)
@@ -124,7 +139,7 @@ static func load_from(path: String) -> Replay:
 		return null
 	var r: Replay = Replay.new()
 	r.rng_seed = f.get_32()
-	r.balance_fingerprint = f.get_32()
+	r.rules_fingerprint = f.get_32()
 	r.grid_w = f.get_16()
 	r.grid_h = f.get_16()
 	r.crate_permille = f.get_16()
@@ -151,17 +166,17 @@ const TRACE_INTERVAL: int = 60
 ## what notices.
 var trace_digest: String = ""
 
-func fresh_state(balance: Balance) -> MatchState:
+func fresh_state(balance: Balance, powerups: PowerupTable = null) -> MatchState:
 	var active: Array[bool] = []
 	for i in range(C.MAX_PLAYERS):
 		active.append(i < player_count)
-	return MatchState.create(balance, arena_def(), rng_seed, active)
+	return MatchState.create(balance, arena_def(), rng_seed, active, powerups)
 
 ## Replays this log against a fresh MatchState and returns the final state,
 ## leaving `trace_digest` set. The determinism harness: the caller compares both
 ## the final fingerprint and the trace against committed values.
-func run(balance: Balance) -> MatchState:
-	var state: MatchState = fresh_state(balance)
+func run(balance: Balance, powerups: PowerupTable = null) -> MatchState:
+	var state: MatchState = fresh_state(balance, powerups)
 	var trace: int = SimHash.start()
 	var total: int = tick_count()
 	for t in range(1, total + 1):

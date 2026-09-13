@@ -66,6 +66,9 @@ Custom, grid-based, no physics engine:
 - Movement resolves one axis at a time, applies lane snapping, then applies corner assist.
 - Bomb solidity uses a per-player "standing on my own bomb" exemption flag that clears the first tick the player's centre leaves that tile.
 - Blast resolution is a flood along four rays, computed once at detonation and stored as a tile list, not re-evaluated per frame. **Each flame tile carries the owning player index**, propagated through chain detonations from the player who *started* the chain, because that is what kill credit and the suicide penalty are derived from. See [game design §5.2](game-design.md) — the two documents disagreed on this until M1 settled it in favour of propagation.
+- **A kicked bomb stays tile-quantised** (M3). It advances one whole tile every `kick_ticks_per_tile` ticks rather than acquiring a sub-tile position, because every rule that touches a bomb — solidity, the bomb-per-tile lookup, blast rays, chain detonation — indexes it by tile, and giving one a fractional position would mean revisiting all of it for the sake of one power-up. The bomb carries `slide_dir` and `slide_ticks`, which is everything a view needs to interpolate the motion without the rules learning about it.
+- **A bomb that arrives on a burning tile detonates**, credited to the flame's owner. In M1 this could not arise: a ray that lights a tile also chains any bomb standing on it. M3 added two ways for a bomb to move — kicked and tossed — so the case is real, and "a bomb caught in a blast detonates" has to keep meaning what it says.
+- Bombs **pass under players**. Nothing in this game collides with a player ([game design §5.1](game-design.md)) and a kicked bomb that stopped on one would need a rule about which players count — the dead, the spawn-protected, the one who kicked it.
 
 ## 3a. Round clock, respawn, and scoring
 
@@ -75,7 +78,13 @@ All of this is sim state, ticked at 60 Hz, and therefore replayable and testable
 - Respawn is a per-player countdown; on expiry the sim scores every candidate respawn tile by distance to the nearest living player, live bomb, and flame, and takes the best. Ties break by tile index so the choice stays deterministic.
 - Spawn protection is a tick counter on the player, cleared early by a bomb drop.
 - Kill credit reads the owner off the flame tile that killed the player: someone else's, `+1` to them; your own, `−1` to you.
-- Crate regeneration runs on its own tick counter and draws candidate tiles from the seeded PRNG in a fixed order. Its exclusion rules (not adjacent to a living player, never sealing a player in) are a filter applied before the draw, so the number of PRNG calls does not depend on how many candidates were rejected — otherwise determinism quietly breaks.
+- Crate regeneration runs on its own tick counter and draws candidate tiles from the seeded PRNG in a fixed order. Its exclusion rules (not adjacent to a living player, never sealing a player in) are a filter applied before the draw, so the number of PRNG calls does not depend on how many candidates were rejected — otherwise determinism quietly breaks. The never-seal-in guarantee is a bounded flood fill from each living player's tile, run after a chosen crate is provisionally placed; a crate that fails the probe is taken back off the board and **not retried**, because a retry would spend a second draw on one candidate and reintroduce exactly the dependency this rule exists to prevent.
+- **Two PRNG rules, added in M3 because the economy is where draw counts get away from you** (see [the M3 brief §2](milestone-3-brief.md)):
+  - *Destroying a crate costs exactly three draws* — the drop roll, the kind roll and the curse-variant roll — spent whether or not anything drops and whether or not the thing that dropped is a Dud. A conditional draw makes the sequence depend on its own outcomes: still reproducible, but the shape of bug that survives a green golden replay until the day someone retunes a weight.
+  - *Kit-loss scatter and respawn tile selection consume no draws at all.* Both are ordered searches over candidate tiles, so a round's random sequence does not depend on how many people died in it.
+  - A corollary worth knowing: `SimRng.next_below(n)` short-circuits at `n <= 1` **without spending a draw**, which is wrong wherever the draw *count* is the contract. `next_index(n)` is the variant that always spends one, and the weighted power-up pick and the regeneration wave both use it — a table tuned down to a single power-up, or an arena down to its last candidate tile, would otherwise silently shift every value after it.
+- Curses are **effective-value overrides read at the point of use**, never writes to the player's loadout. That is what makes an expiring curse restore exactly what the player had, and what keeps a cursed player's kit loss on death honest. The reversed-controls curse lives in the simulation rather than in the input layer deliberately: a curse that rewrote input upstream of `Replay.record()` would be invisible in the log, and replays would show a player walking calmly into a fire for no reason.
+- Pickups are **two parallel flat byte grids**, like flames: one pickup per tile falls out of the representation instead of needing a rule, "what is on this tile" is O(1), and a kit-loss scatter of a dozen items allocates nothing.
 
 Nothing here can deadlock a round: there is no last-player-standing check, no overtime, and no stalemate detection to get wrong. The clock runs out and the round ends.
 
@@ -141,11 +150,16 @@ Export note carried from the ADR: enable **both** `Import S3TC BPTC` and `Import
 
 Every number in the game design doc marked **(tune)** lives in a Godot `Resource` (`.tres`), not in code:
 
-- `data/balance/default.tres` — speeds, fuse time, blast timing, caps, round length, respawn delay, spawn protection, kit-loss fraction, crate regeneration interval.
-- `data/balance/powerups.tres` — drop rate and weight table.
-- `data/arenas/*.tres` — grid size, crate density, spawn and respawn tiles, tileset reference.
+- `data/balance/default.tres` (`Balance`) — speeds and the speed step, fuse time, blast timing, power-up caps, kick speed, toss distance, curse duration, kit-loss fraction and scatter radius, crate regeneration interval, wave size, crate cap and the escape-tile minimum, round length, respawn delay, spawn protection.
+- `data/balance/powerups.tres` (`PowerupTable`) — drop rate and the eight weights.
+- `data/balance/match.tres` (`MatchRules`) — round wins to take the match, the round ceiling, scoreboard duration.
+- `data/arenas/*.tres` (`ArenaDef`) — grid size, crate density, spawn and respawn tiles, tileset reference.
 
 The sim is written against whatever grid size the arena resource specifies — 25 × 15 is a value, not an assumption baked into the code. Two of the open design questions (arena size, kit loss on death) are answered by editing a `.tres` and playing, which is the point.
+
+**`MatchRules` is a separate resource from `Balance`, deliberately.** Its numbers are read *above* the simulation and the simulation never sees them, so they must not be in the replay's rules fingerprint — changing how long the scoreboard sits should not invalidate every committed replay. Putting them in `Balance` would mean fields deliberately excluded from that resource's own fingerprint, which is a trap for whoever adds the next one.
+
+**The replay stores a *rules* fingerprint, not a balance fingerprint** (M3). It mixes `Balance` and `PowerupTable`, because a re-weighted drop table changes what a recorded round produces just as surely as a retuned fuse does. The file format's magic stays `HGR1`: the byte layout and the input encoding are unchanged, and what changed is only what goes into that `u32`. An M1-era replay therefore reports a rules mismatch, which is correct — M3 retuned the rules and the round it recorded no longer exists.
 
 Balance changes then become small, reviewable diffs that a designer can make without touching GDScript, and the sim can be instantiated in tests with a synthetic balance resource.
 
@@ -174,8 +188,8 @@ hen-grenade/
 
 ## 8. Testing strategy
 
-- **Unit tests** on `src/sim` **and on the pure parts of `src/input` and `src/ui`** — the rule set, blast propagation, chain reactions, kill credit through chains, the suicide penalty, power-up application and kit loss on death, respawn tile selection, crate-regeneration exclusion rules, round scoring, and (from M2) slot assignment: joins, leaves, bots, GUID reconnects and the identical-pad case. The line is not "input is untestable" — it is `Input` and `Node` that cannot be reached from a `--script` process, so the logic that matters is kept out of both. These are the tests that matter and they run headless in seconds. They run on a small in-repo harness (`tests/test_case.gd` + `tests/run_tests.gd`) rather than GUT: the sim layer is pure GDScript with no Nodes, which is exactly the case a 100-line runner handles well, and vendoring a third-party addon to get assertion sugar is a poor trade. Decided in M1; see [the M1 brief §10](milestone-1-brief.md).
-- **Golden replay tests** — a stored seed + input log must produce a byte-identical end state. This catches accidental non-determinism the moment it is introduced, which is otherwise a nightmare to debug.
+- **Unit tests** on `src/sim` **and on the pure parts of `src/input`, `src/ui` and `src/app`** — the rule set, blast propagation, chain reactions, kill credit through chains, the suicide penalty, power-up application and caps, the three abilities and the four curses, kit loss on death and the scatter, respawn tile selection, crate-regeneration exclusion rules and the seal probe, the PRNG draw-count invariants, round scoring, best-of-3 and the decider, and (from M2) slot assignment: joins, leaves, bots, GUID reconnects and the identical-pad case. The line is not "input is untestable" — it is `Input` and `Node` that cannot be reached from a `--script` process, so the logic that matters is kept out of both. These are the tests that matter and they run headless in seconds. They run on a small in-repo harness (`tests/test_case.gd` + `tests/run_tests.gd`) rather than GUT: the sim layer is pure GDScript with no Nodes, which is exactly the case a 100-line runner handles well, and vendoring a third-party addon to get assertion sugar is a poor trade. Decided in M1; see [the M1 brief §10](milestone-1-brief.md).
+- **Golden replay tests** — a stored seed + input log must produce a byte-identical end state. This catches accidental non-determinism the moment it is introduced, which is otherwise a nightmare to debug. **There are two committed rounds from M3, and they are not interchangeable**: the arena ships at ~70% crates and the regeneration cap is 45%, so no wave can land until the players have destroyed about sixty crates — which the generator's random-walk input does not manage inside a minute. `golden_01` is the representative round at the shipped density; `golden_02` starts thin enough that crate regeneration, the only PRNG consumer M3 added, actually fires. A golden replay that pins rules it never exercises looks like coverage and is worth nothing, so `test_replay.gd` asserts the recorded rounds contain an economy: a drop, a collection, and a wave.
 - **Bot soak test** — four bots, 200 rounds, headless, assert no crashes, no player ever stuck unable to respawn, no crate sealing a player in, and a sane score distribution. Also our balance smoke signal.
 - **Manual hardware pass** per milestone on the reference Pi 400 and on Windows: four F310s through a powered hub, the three-pads-plus-built-in-keyboard configuration, hot-plug, and worst-case frame time.
 - CI (GitHub Actions): headless Godot runs unit + replay tests on every push; tagged commits produce Windows x86_64 and Linux arm32 artifacts.
@@ -303,3 +317,46 @@ Which is the other lesson here: **`--write-movie <file>.png` is a usable
 screenshot mechanism for verifying UI**. Godot writes one PNG per rendered frame
 with `--fixed-fps`, so pointing it at an existing scripted run costs nothing and
 turns "the layout is probably fine" into a picture.
+
+### A.17 `--headless --write-movie` segfaults in 4.7.2 — so assert the layout instead
+
+The screenshot trick in A.16 **does not work headless in 4.7.2**. The engine
+prints `Movie Maker mode enabled, recording movie in 640×360 @ 60 FPS...` and
+then crashes with signal 11 before the first frame, with an absolute or a
+relative output path alike. M3 needed it for the opposite of M2's problem — not
+"did the overlay draw" but "did it draw *in the right place*", since the panel
+now sizes itself to its content and the longest string in the game is a
+scoreboard row.
+
+The replacement is better than the screenshot was: the overlay reports its own
+geometry. `round_overlay.gd` has a `geometry_problems(mode)` that checks the
+panel is inside the viewport and every visible `Label`'s `get_minimum_size()` box
+is inside the panel, and the match scene's smoke self-check calls it once per
+mode. It needs no renderer, it runs in CI, and it was mutation-checked by
+shrinking the panel to 140 px — which correctly reported the two longest footers
+as not fitting.
+
+The general rule, third time it has come up in this appendix: **a headless check
+must assert something about what it built.** A.13 said a script error does not
+fail the process, A.15 said a scene with no script still instantiates, and now
+A.17 says you cannot fall back to looking at it.
+
+### A.18 Draw calls cannot be measured headless, so the measurement refuses to run
+
+`Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME` comes from the rendering driver,
+and the dummy driver reports **zero**. A headless draw-call check would therefore
+print a budget of nothing and read as a comfortable pass.
+
+`-- --measure` (M3, in `main.gd`) prints peak draw calls, object counts and worst
+frame time for the match and stress scenes, and **refuses to run when
+`DisplayServer.get_name() == "headless"`** rather than reporting zeroes. It is
+the number in the milestone reports from M3 onward, replacing "read the F5
+overlay and write down what you see", which is not a repeatable measurement and
+cannot be done at all over a remote shell.
+
+It also produced the M3 result worth remembering: **56 pickups on screen cost
+zero additional draw calls**, measured both ways with the stress scene's `K`
+toggle — 52 either way, with the object count going 851 → 963. That is A.12's
+pass discipline paying off. The cost of a class of entity is the number of
+*passes* it needs, not the number of instances, which is the sentence to keep in
+mind when M4 starts spending the budget on effects.

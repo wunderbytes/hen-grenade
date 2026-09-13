@@ -50,7 +50,7 @@ Arena dimensions live in a data file, not in code, so this is cheap to change af
 
 ### 5.1 Movement
 
-- Speed is in **tiles per second**; base **3.5 t/s (tune)**, up from a classic-Bomberman-ish 3.0 to suit the larger arena. Power-ups step it by +0.6, capped at **6.0**.
+- Speed is in **tiles per second**; base **3.5 t/s (tune)**, up from a classic-Bomberman-ish 3.0 to suit the larger arena. Power-ups step it by +0.6, capped at **6.0**. *(M3: the simulation has no fractions, so a step is 3 sub-tile units per tick — **+0.70 t/s** — and four of them reach the cap. Same quantisation the base speed took: 3.5 is really 3.516.)*
 - Movement is free along an axis but **snapped to the perpendicular lane** — you always walk down the middle of a corridor. This is the single most important feel decision in the genre.
 - **Corner assist:** if a player pushes into a wall while a perpendicular opening is within **6 px (tune)**, they slide toward the opening instead of stopping. Without this the game feels like it is fighting you; with too much of it, it feels floaty.
 - Players do not collide with each other. Player-vs-player collision in a tile game causes far more frustration (blocked in a corridor, shoved into a blast) than it adds.
@@ -93,12 +93,20 @@ Dropped by destroyed crates at a **~30% (tune)** rate, weighted by the table bel
 | Bigger Blast | +1 blast radius | high | 8 |
 | Speed Up | +0.6 t/s | medium | 6.0 t/s |
 | Kick | Walk into a bomb to slide it until it hits something | medium | on/off |
-| Toss | Hold and release to lob your bomb two tiles over walls | low | on/off |
-| Remote | Bombs no longer auto-fuse; press B to detonate all of yours | low | on/off |
+| Toss | Press B to lob the bomb under your feet two tiles over walls | low | on/off, replaces Remote |
+| Remote | Bombs no longer auto-fuse; press B to detonate all of yours | low | on/off, replaces Toss |
 | Jackpot | Blast radius jumps to max | rare | — |
 | Dud (curse) | A timed debuff, 8 s: reversed controls, or forced constant bomb-dropping, or radius 1, or glued at max speed | low | — |
 
 Design intent: Extra Bomb and Bigger Blast are the bread and butter, always meaningful, never game-ending on their own. Kick and Toss change how you think about space. Remote is the skill pick — highest ceiling, easiest way to blow yourself up. The Dud exists so that hoovering up every drop carries risk.
+
+Three things M3 had to settle, because there is only one action button:
+
+- **Toss and Remote are mutually exclusive, and the last one you pick up wins.** Hanging both "throw the bomb I am standing on" and "detonate everything I own" off B needs either a tap-versus-hold discrimination in a twitch game or an arbitrary priority rule. Instead: B is your ability button and you have exactly one ability. It also makes taking a Toss while holding Remote a real decision rather than a free upgrade.
+- **Toss fires on the press, not on a hold-and-release.** The classic version charges distance during the hold; here the distance is a fixed two tiles, so a hold buys a wait and no decision. Flagged for the playtest — if two tiles always being two tiles feels flat, a charged throw is the obvious next thing to try.
+- **A power-up already at its cap is still consumed.** Leaving it on the floor for someone who can use it would be kinder, and is the wrong call: a pickup nobody can pick up is a permanently blocked tile that looks like a bug, and "the pile in the corner is mine because I am maxed out" is a rule nobody would guess.
+
+And one about the curse: **a curse dies with you.** Death already costs half your kit, and carrying an 8-second Dud through a respawn on top of that compounds two punishments — the glued-at-max-speed variant in particular becomes a death spiral. Dying clears it, and it scatters nothing: dropping a Dud where you died would be a gift to whoever killed you, in the shape of a trap.
 
 ### 6.1 What you lose when you die
 
@@ -106,11 +114,15 @@ Starting rule **(tune)**: stacking upgrades (bombs, blast, speed) are **halved, 
 
 This is the most important balance dial in the game and it will need real playtesting. Losing everything makes deaths brutal and the last minute unwinnable for anyone behind; losing nothing lets a strong player snowball unopposed for two minutes. Halving keeps a good player ahead while making each death bleed, and it turns the spot where someone died into a contested pile worth fighting over.
 
+Two details M3 pinned down. The halving is measured from the **starting loadout**, not from zero — halving the absolute value would take a player's base bomb away and leave them unable to play. And nothing scatters onto a burning tile: the tile you died on is on fire by definition, and scattering into the blast that just killed you would evaporate the whole kit before anybody could see it.
+
 ### 6.2 Keeping the arena stocked
 
 A two-minute round with four players and growing blast radii strips the arena of crates in about a minute. Without a fix, the second half of every round is a bare box where nobody can rebuild after a death — the exact opposite of the comeback dynamic §6.1 is trying to create.
 
 So crates **regenerate**: every **20 s (tune)** a small wave of crates drops onto random free tiles, with a short telegraphed landing animation. Hard rules — never on a tile occupied by a player, bomb, flame, or pickup; never adjacent to a living player; never in a way that leaves a player with no exit; and a cap on total crates so the arena cannot silt up.
+
+**The cap makes this a floor under the crate supply, not a tide** (M3). It is 45% (tune) of the tiles a crate could occupy, and the arena *starts* at ~70%, so regeneration does nothing at all until the round has genuinely thinned out. That shape is deliberate: a wave arriving while the arena is still a maze would be pure interference, which is exactly what open question 4 is worried about.
 
 If this proves fiddly in practice, the simpler fallback is to skip crate regeneration and instead drop a lone power-up onto a random free tile every 15 s. It solves the supply problem but not the "the arena has become an empty field" problem, so crates are the first choice.
 

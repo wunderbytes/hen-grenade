@@ -11,17 +11,34 @@ extends Node2D
 ##   - A 12-crate regeneration wave every 5s (forces tilemap redraws)
 ##   - 2 CPUParticles2D bursts at the intended cap
 ##   - A full HUD mock in the side panels, updating every frame
+##   - **56 pickups on the floor (M3)** — a deliberate over-estimate of the worst
+##     case: four maxed-out players dying at once scatter about 48 between them,
+##     plus whatever the crates have dropped. Pickups are a new per-frame draw,
+##     so M0's number was measured without them and the worst case had to grow.
 ##
 ## Toggles (bisect the cost, don't read a single number):
 ##   V  vsync on/off          P  particles on/off
 ##   E  explosions on/off     H  HUD on/off
-##   R  cycle output resolution 720p -> 1080p -> 4K
+##   K  pickups on/off        R  cycle output resolution 720p -> 1080p -> 4K
 ##   F1 sandbox scene         F2 this scene
 
 const EXPLOSION_COUNT: int = 32
 const REGEN_WAVE_SIZE: int = 12
 const REGEN_PERIOD_S: float = 5.0
 const PARTICLE_CAP: int = 64
+const PICKUP_COUNT: int = 56
+
+## The pickup look, mirroring src/view/entity_view.gd. Duplicated rather than
+## shared because that is a scene script with no `class_name` — the HUD here is a
+## mock for the same reason. If the real one changes shape this has to follow, or
+## the benchmark stops measuring the game.
+const PICKUP_HALF: float = 6.0
+const PICKUP_SHELL: Color = Color8(18, 18, 22)
+const PICKUP_COLORS: Array[Color] = [
+	Color8(250, 170, 60), Color8(240, 90, 90), Color8(110, 220, 250), Color8(140, 230, 130),
+	Color8(200, 150, 250), Color8(250, 240, 110), Color8(255, 255, 255), Color8(120, 100, 110),
+]
+const PICKUP_INNER: Array[float] = [2.0, 4.0, 3.0, 2.0, 4.0, 3.0, 5.0, 1.0]
 
 var _grid: TileMapLayer
 var _tick: int = 0
@@ -38,9 +55,11 @@ var _hud: Control
 var _hud_labels: Array[Label] = []
 var _squares: Array[Dictionary] = []
 
+var _pickup_tiles: Array[Vector2i] = []
 var _explosions_on: bool = true
 var _particles_on: bool = true
 var _hud_on: bool = true
+var _pickups_on: bool = true
 var _res_index: int = 0
 const _RESOLUTIONS: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1920, 1080), Vector2i(3840, 2160)]
 
@@ -54,6 +73,7 @@ func _ready() -> void:
 	])
 	_grid.position = Vector2(C.ARENA_ORIGIN)
 	_build_arena()
+	_build_pickups()
 	_build_explosions()
 	_build_particles()
 	_build_hud()
@@ -63,7 +83,7 @@ func _ready() -> void:
 
 func _add_hint() -> void:
 	var lbl: Label = Label.new()
-	lbl.text = "STRESS  [V vsync][P particles][E expl][H hud][R res]"
+	lbl.text = "STRESS  [V vsync][P particles][E expl][H hud][K pickups][R res]"
 	lbl.position = Vector2(4, 4)
 	lbl.add_theme_font_size_override("font_size", 8)
 	lbl.add_theme_color_override("font_color", Color(0.7, 0.85, 0.7))
@@ -87,6 +107,18 @@ func _is_wall(cell: Vector2i) -> bool:
 	if cell.x % 2 == 0 and cell.y % 2 == 0:
 		return true
 	return false
+
+# --- Pickup field (M3) -------------------------------------------------------
+
+## A fixed, evenly spread set of tiles, picked once. Fixed rather than random so
+## two runs on the same machine are comparable, which is the whole point of this
+## scene.
+func _build_pickups() -> void:
+	var step: int = maxi(1, _interior_tiles.size() / PICKUP_COUNT)
+	var i: int = 0
+	while _pickup_tiles.size() < PICKUP_COUNT and i < _interior_tiles.size():
+		_pickup_tiles.append(_interior_tiles[i])
+		i += step
 
 # --- Scripted squares (deterministic Lissajous paths) -----------------------
 
@@ -249,12 +281,26 @@ func _update_regen(delta: float) -> void:
 # --- Drawing ----------------------------------------------------------------
 
 func _draw() -> void:
+	# Same pass discipline as the real view (Appendix A.12): all pickup shells,
+	# then all pickup cores, then the squares — never shape-by-shape per entity.
+	if _pickups_on:
+		for tile in _pickup_tiles:
+			var c: Vector2 = _pickup_px(tile)
+			draw_rect(Rect2(c.x - PICKUP_HALF, c.y - PICKUP_HALF, PICKUP_HALF * 2.0, PICKUP_HALF * 2.0), PICKUP_SHELL, true)
+		for i in range(_pickup_tiles.size()):
+			var c: Vector2 = _pickup_px(_pickup_tiles[i])
+			var half: float = PICKUP_INNER[i % PICKUP_INNER.size()]
+			draw_rect(Rect2(c.x - half, c.y - half, half * 2.0, half * 2.0), PICKUP_COLORS[i % PICKUP_COLORS.size()], true)
+
 	var t: float = _tick / 60.0
 	for i in range(C.MAX_PLAYERS):
 		var p: Vector2 = Vector2(C.ARENA_ORIGIN) + _square_pos(i, t)
 		var color: Color = C.PLAYER_COLORS[i]
 		draw_rect(Rect2(p.x - 8, p.y - 8, 16, 16), color, true)
 		draw_rect(Rect2(p.x - 8, p.y - 8, 16, 16), Color.BLACK, false, 1.0)
+
+func _pickup_px(tile: Vector2i) -> Vector2:
+	return Vector2(C.ARENA_ORIGIN) + Vector2(tile.x * C.TILE_PX + C.TILE_PX / 2.0, tile.y * C.TILE_PX + C.TILE_PX / 2.0)
 
 # --- Toggles ----------------------------------------------------------------
 
@@ -265,6 +311,7 @@ func _input(event: InputEvent) -> void:
 			KEY_P: _toggle_particles()
 			KEY_E: _toggle_explosions()
 			KEY_H: _toggle_hud()
+			KEY_K: _toggle_pickups()
 			KEY_R: _cycle_resolution()
 			KEY_F1: get_tree().change_scene_to_file("res://src/app/main.tscn")
 			KEY_F2: pass  # already here
@@ -291,6 +338,10 @@ func _toggle_hud() -> void:
 	_hud_on = not _hud_on
 	_hud.visible = _hud_on
 	print("[stress] hud -> ", _hud_on)
+
+func _toggle_pickups() -> void:
+	_pickups_on = not _pickups_on
+	print("[stress] pickups -> ", _pickups_on)
 
 func _cycle_resolution() -> void:
 	_res_index = (_res_index + 1) % _RESOLUTIONS.size()

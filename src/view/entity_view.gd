@@ -23,6 +23,27 @@ const FLAME_CORE: Color = Color8(255, 236, 150)
 const FLAME_EDGE: Color = Color8(255, 128, 40)
 const BOMB_COLOR: Color = Color8(24, 24, 28)
 
+## Pickup colours, indexed by Powerup.Kind (so index 0 is unused). Programmer art
+## again, and the constraint is the readability pillar rather than beauty: with a
+## 20 px tile and no sprites, **hue plus inner-shape size** is all the
+## distinguishing information there is, so no two kinds share both.
+const PICKUP_COLORS: Array[Color] = [
+	Color8(0, 0, 0),          # NONE, never drawn
+	Color8(250, 170, 60),     # BOMB     orange
+	Color8(240, 90, 90),      # BLAST    red
+	Color8(110, 220, 250),    # SPEED    cyan
+	Color8(140, 230, 130),    # KICK     green
+	Color8(200, 150, 250),    # TOSS     violet
+	Color8(250, 240, 110),    # REMOTE   yellow
+	Color8(255, 255, 255),    # JACKPOT  white
+	Color8(120, 100, 110),    # DUD      grey — the one that should not look nice
+]
+## Inner-square half-size per kind, so the eight drops differ in silhouette and
+## not only in hue (accessibility, game design §8).
+const PICKUP_INNER: Array[float] = [0.0, 2.0, 4.0, 3.0, 2.0, 4.0, 3.0, 5.0, 1.0]
+const PICKUP_HALF: float = 6.0
+const PICKUP_SHELL: Color = Color8(18, 18, 22)
+
 ## Spawn protection blinks at this period, in ticks. 8 on / 8 off is fast enough
 ## to read as "protected" without being a strobe.
 const BLINK_PERIOD: int = 16
@@ -37,12 +58,18 @@ var state: MatchState = null
 ## chain reaction into 47 draw calls against a documented budget of 20. Grouping
 ## the passes costs nothing and keeps a full arena of fire inside the budget.
 ##
-## The pass order is also the painter order: flames below bombs below players,
-## which is what you want anyway — a player must never be hidden by their own
-## explosion.
+## The pass order is also the painter order: pickups below flames below bombs
+## below players, which is what you want anyway — a player must never be hidden
+## by their own explosion, and a pickup about to burn should be under the fire.
+##
+## M3's pickups add **two** passes for any number of them, whatever kinds they
+## are: one for the shells, one for the cores. That is the whole reason the
+## per-kind difference is a colour and a size rather than a different primitive.
 func _draw() -> void:
 	if state == null:
 		return
+	_draw_pickups()
+
 	var flames: Array[Rect2] = []
 	var flame_ages: PackedFloat32Array = PackedFloat32Array()
 	_collect_flames(flames, flame_ages)
@@ -61,6 +88,14 @@ func _draw() -> void:
 		# Telegraphing: pulse faster as the fuse runs out (game design §8). The
 		# pulse is derived from the bomb's own fuse, not from wall-clock time,
 		# so a paused or replayed game shows exactly the same thing.
+		#
+		# A Remote bomb has no fuse to run down, so the same expression would
+		# freeze it either permanently lit or permanently dark. It gets a steady
+		# mark instead, which is also the honest picture: that bomb is not
+		# counting, it is waiting.
+		if b.remote:
+			draw_circle(_tile_px(b.tile), BOMB_RADIUS - 3.0, Color(0.95, 0.9, 0.35))
+			continue
 		var urgency: float = _urgency(b)
 		var period: int = maxi(4, int(round(24.0 - 18.0 * urgency)))
 		if (b.fuse_ticks % period) < (period / 2):
@@ -89,6 +124,29 @@ func _draw() -> void:
 		var centre: Vector2 = _pos_px(p.pos)
 		var pip: Vector2 = centre + Vector2(Sim.dir_vec(p.facing)) * (PLAYER_HALF - 2.0)
 		draw_rect(Rect2(pip.x - 2.0, pip.y - 2.0, 4.0, 4.0), Color(1, 1, 1, 0.9), true)
+
+## Two passes over the pickup grid: every dark shell, then every coloured core.
+## Scanning the flat grid rather than a list is the same trade flames make — no
+## per-entity allocation, and no iteration order to get wrong.
+func _draw_pickups() -> void:
+	var arena: Arena = state.arena
+	var tiles: Array[Vector2i] = []
+	var kinds: PackedInt32Array = PackedInt32Array()
+	for i in range(state.pickup_kind.size()):
+		var kind: int = state.pickup_kind[i]
+		if kind == Powerup.Kind.NONE:
+			continue
+		tiles.append(Vector2i(i % arena.w, i / arena.w))
+		kinds.append(kind)
+	if tiles.is_empty():
+		return
+	for t in tiles:
+		var c: Vector2 = _tile_px(t)
+		draw_rect(Rect2(c.x - PICKUP_HALF, c.y - PICKUP_HALF, PICKUP_HALF * 2.0, PICKUP_HALF * 2.0), PICKUP_SHELL, true)
+	for i in range(tiles.size()):
+		var c: Vector2 = _tile_px(tiles[i])
+		var half: float = PICKUP_INNER[kinds[i]]
+		draw_rect(Rect2(c.x - half, c.y - half, half * 2.0, half * 2.0), PICKUP_COLORS[kinds[i]], true)
 
 func _collect_flames(out_rects: Array[Rect2], out_ages: PackedFloat32Array) -> void:
 	var arena: Arena = state.arena

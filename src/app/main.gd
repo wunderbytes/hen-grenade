@@ -21,8 +21,11 @@ func _ready() -> void:
 	if _smoke_requested():
 		_run_smoke()
 		return
+	if _measure_requested():
+		_run_measure()
+		return
 	_add_label("HEN GRENADE", Vector2(C.VIEW_W / 2.0 - 70, C.VIEW_H / 2.0 - 24), 16, Color(0.95, 0.95, 0.9))
-	_add_label("M2 — players, controllers, lobby", Vector2(C.VIEW_W / 2.0 - 116, C.VIEW_H / 2.0 - 4), 8, Color(0.7, 0.8, 0.7))
+	_add_label("M3 — power-ups, economy, match flow", Vector2(C.VIEW_W / 2.0 - 132, C.VIEW_H / 2.0 - 4), 8, Color(0.7, 0.8, 0.7))
 	_add_label("pads join with A · keyboard with Space / Right Ctrl", Vector2(C.VIEW_W / 2.0 - 148, C.VIEW_H / 2.0 + 12), 8, Color(0.7, 0.75, 0.7))
 	_add_label("SPACE lobby   F2 stress   F3 sandbox", Vector2(C.VIEW_W / 2.0 - 112, C.VIEW_H / 2.0 + 30), 8, Color(0.6, 0.7, 0.6))
 	await get_tree().create_timer(TITLE_SECONDS).timeout
@@ -68,6 +71,54 @@ const SMOKE_TICKS: int = 40
 func _smoke_requested() -> bool:
 	return OS.get_cmdline_user_args().has("--smoke")
 
+func _measure_requested() -> bool:
+	return OS.get_cmdline_user_args().has("--measure")
+
+## Prints the draw-call and frame-time counters for a live round, so the budget
+## in technical design §5 can be checked without a person squinting at the F5
+## overlay and reading numbers off a photograph.
+##
+## **This one cannot run headless.** `RENDER_TOTAL_DRAW_CALLS_IN_FRAME` comes from
+## the rendering driver, and the dummy driver reports zero — so a headless run of
+## this would print a budget of nothing and look like a pass. It refuses instead
+## (Appendix A.18). Run it windowed:
+##
+##   godot --path . --fixed-fps 60 --quit-after 420 -- --measure
+func _run_measure() -> void:
+	if DisplayServer.get_name() == "headless":
+		printerr("--measure needs a real renderer; the dummy driver reports zero draw calls")
+		get_tree().quit(1)
+		return
+	print("== draw call measurement ==  budget 20 (technical design §5)")
+	print("driver: %s" % DisplayServer.get_name())
+	# The real round *and* the stress scene, because the number that matters is
+	# the worst case and the game's own quiet frame is not it.
+	for path in [MATCH, STRESS]:
+		await _measure_scene(path)
+	get_tree().quit(0)
+
+func _measure_scene(path: String) -> void:
+	var scene: Node = (load(path) as PackedScene).instantiate()
+	add_child(scene)
+	# Let it get going, so the numbers include bombs, flames and pickups rather
+	# than an empty arena on its first frame.
+	for _i in range(MEASURE_WARMUP):
+		await get_tree().process_frame
+	var worst_calls: int = 0
+	var worst_objects: int = 0
+	var worst_ms: float = 0.0
+	for _i in range(MEASURE_FRAMES):
+		await get_tree().process_frame
+		worst_calls = maxi(worst_calls, int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)))
+		worst_objects = maxi(worst_objects, int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)))
+		worst_ms = maxf(worst_ms, Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
+	print("%-40s draw calls %3d   objects %4d   worst frame %.2f ms" % [path, worst_calls, worst_objects, worst_ms])
+	scene.queue_free()
+	await get_tree().process_frame
+
+const MEASURE_WARMUP: int = 120
+const MEASURE_FRAMES: int = 240
+
 ## Instantiates every scene, steps it, and quits. This is the step M0's
 ## Appendix A.1 says is missing: `--import` registers class names but does not
 ## fully compile scene-attached scripts, so a type error in a scene script only
@@ -107,10 +158,17 @@ func _run_smoke() -> void:
 			await get_tree().physics_frame
 		if instance.has_method("smoke_step"):
 			instance.call("smoke_step", SMOKE_TICKS)
-		# The pause menu and the reconnect notice each have a `_draw` and a pile
-		# of Labels that no other smoke path reaches. Each one needs a real frame
-		# on screen, because `_draw` runs on a frame and nowhere else.
-		for method in ["smoke_overlay_menu", "smoke_overlay_reconnect", "smoke_overlay_hide"]:
+		# The overlay's four modes each have a `_draw` and a pile of Labels that
+		# no other smoke path reaches, and the scoreboard and the winner screen
+		# build their text out of a live MatchState and MatchRecord — exactly the
+		# shape of thing that fails on a null nobody thought about. Each one
+		# needs a real frame on screen, because `_draw` runs on a frame and
+		# nowhere else.
+		for method in [
+				"smoke_overlay_menu", "smoke_overlay_reconnect",
+				"smoke_overlay_scoreboard", "smoke_overlay_match_result",
+				"smoke_overlay_hide",
+			]:
 			if instance.has_method(method):
 				instance.call(method)
 				# Two process frames, not one: `queue_redraw()` inside the call

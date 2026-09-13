@@ -1,6 +1,7 @@
 extends Node2D
-## The side panels, the round clock, and the round-end banner.
-## See docs/milestone-1-brief.md §9 and docs/game-design.md §8.
+## The side panels and the round clock.
+## See docs/milestone-1-brief.md §9, docs/milestone-3-brief.md §6.3, and
+## docs/game-design.md §8.
 ##
 ## The 640 x 360 viewport is 500 px of arena plus a 70 px margin down each side
 ## and a 30 px band top and bottom — the margins are where the HUD lives, which
@@ -9,10 +10,19 @@ extends Node2D
 ## Everything is a Label rather than draw_string: per technical-design.md
 ## Appendix A.6, Node2D has no theme-font accessor in 4.7 and Label is the
 ## version-robust way to put text on screen.
+##
+## **One Label per card, however much is written on it.** M3 roughly doubled what
+## a card carries — the design asks for score, bombs, blast, speed, abilities and
+## the respawn countdown, and best-of-3 adds a round tally — and all of it goes
+## into the one multi-line Label a card already had. A Label costs the same
+## whether it holds two lines or nine; a *second* Label would cost another draw
+## call, and Appendix A.11 is clear about what that is worth.
+##
+## The round-end banner is gone from here: M3's scoreboard and winner screen are
+## modes of `round_overlay.gd`, which is the file that owns stopped rounds.
 
 const FONT_SIZE: int = 8
 const CLOCK_FONT_SIZE: int = 14
-const BANNER_FONT_SIZE: int = 16
 ## Slots 0 and 2 live in the left margin, 1 and 3 in the right.
 const LEFT_SLOTS: Array[int] = [0, 2]
 const RIGHT_SLOTS: Array[int] = [1, 3]
@@ -21,7 +31,6 @@ const URGENT_SECONDS: int = 10
 
 var _cards: Array[Label] = []
 var _clock: Label = null
-var _banner: Label = null
 var _hint: Label = null
 
 func _ready() -> void:
@@ -32,53 +41,66 @@ func _ready() -> void:
 	# 32-draw-call bill against a 20-call budget (technical design §5).
 	for i in range(LEFT_SLOTS.size()):
 		var slot: int = LEFT_SLOTS[i]
-		_cards[slot] = _make_label(Vector2(3, 40 + i * 140), FONT_SIZE, C.PLAYER_COLORS[slot], false)
+		_cards[slot] = _make_label(Vector2(3, 34 + i * 150), FONT_SIZE, C.PLAYER_COLORS[slot], false)
 	for i in range(RIGHT_SLOTS.size()):
 		var slot: int = RIGHT_SLOTS[i]
-		_cards[slot] = _make_label(Vector2(C.VIEW_W - C.HUD_PANEL_W + 3, 40 + i * 140), FONT_SIZE, C.PLAYER_COLORS[slot], false)
+		_cards[slot] = _make_label(Vector2(C.VIEW_W - C.HUD_PANEL_W + 3, 34 + i * 150), FONT_SIZE, C.PLAYER_COLORS[slot], false)
 
-	# The clock and the banner do sit over busy pixels, so they keep theirs.
+	# The clock does sit over busy pixels, so it keeps its shadow.
 	_clock = _make_label(Vector2(C.VIEW_W / 2.0 - 22, 6), CLOCK_FONT_SIZE, Color(0.95, 0.95, 0.9), true)
-	_banner = _make_label(Vector2(C.VIEW_W / 2.0 - 120, C.VIEW_H / 2.0 - 20), BANNER_FONT_SIZE, Color(1, 1, 1), true)
-	_banner.visible = false
 	_hint = _make_label(Vector2(4, C.VIEW_H - 12), FONT_SIZE, Color(0.55, 0.62, 0.55), false)
 	_hint.text = "ESC pause  F1 title  F3 sandbox  F5 metrics"
 
-func sync(state: MatchState) -> void:
+## `record` may be null — the dev scenes and an early frame have a round without
+## a match around it — in which case the tally line is simply left off.
+func sync(state: MatchState, record: MatchRecord = null) -> void:
 	_clock.text = _format_clock(state.seconds_left())
 	var urgent: bool = state.seconds_left() <= URGENT_SECONDS
 	_clock.add_theme_color_override("font_color", Color(1, 0.35, 0.3) if urgent else Color(0.95, 0.95, 0.9))
 
 	for slot in range(C.MAX_PLAYERS):
-		var p: PlayerState = state.players[slot]
-		if not p.active:
-			_cards[slot].text = "P%d\n—" % [slot + 1]
-			continue
-		var lines: PackedStringArray = PackedStringArray()
-		lines.append("P%d" % (slot + 1))
-		lines.append("score %d" % p.score)
-		lines.append("%dk / %dd" % [p.kills, p.deaths])
-		lines.append("bomb %d" % p.bomb_capacity)
-		lines.append("blast %d" % p.blast_radius)
-		if not p.alive:
-			# Ceiling, so the last visible number is 1 rather than 0.
-			lines.append("back in %d" % ((p.respawn_ticks + C.TICK_HZ - 1) / C.TICK_HZ + 1))
-		elif p.spawn_protect_ticks > 0:
-			lines.append("SAFE")
-		_cards[slot].text = "\n".join(lines)
+		_cards[slot].text = _card_text(state, slot, record)
 
-func show_result(state: MatchState) -> void:
-	var winner: int = state.winner()
-	if winner < 0:
-		_banner.text = "     DRAW\n\n A rematch  ·  B lobby"
-		_banner.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
-	else:
-		_banner.text = "  PLAYER %d WINS\n\n A rematch  ·  B lobby" % (winner + 1)
-		_banner.add_theme_color_override("font_color", C.PLAYER_COLORS[winner])
-	_banner.visible = true
+## What a player now actually has, in the order they need it: who they are, how
+## they are doing, what they are carrying, and what is about to happen to them.
+func _card_text(state: MatchState, slot: int, record: MatchRecord) -> String:
+	var p: PlayerState = state.players[slot]
+	var header: String = "P%d" % (slot + 1)
+	if record != null:
+		header += " " + record.pips(slot)
+	if not p.active:
+		return "%s\n—" % header
 
-func hide_result() -> void:
-	_banner.visible = false
+	var lines: PackedStringArray = PackedStringArray()
+	lines.append(header)
+	lines.append("%d pts" % p.score)
+	lines.append("%dk / %dd" % [p.kills, p.deaths])
+	lines.append("bomb %d" % p.bomb_capacity)
+	lines.append("blast %d" % p.blast_radius)
+	if p.speed_steps > 0:
+		lines.append("speed +%d" % p.speed_steps)
+
+	# Abilities, only when there is one to show. An empty slot is worth nothing
+	# on a 70 px panel and a line of dashes reads as a bug.
+	var kit: PackedStringArray = PackedStringArray()
+	if p.has_kick:
+		kit.append(Powerup.short_name(Powerup.Kind.KICK))
+	if Powerup.is_ability(p.ability):
+		kit.append(Powerup.short_name(p.ability))
+	if not kit.is_empty():
+		lines.append(" ".join(kit))
+
+	# A curse and how long is left of it: the player needs to know when their
+	# controls come back, not merely that something is wrong.
+	if p.has_curse():
+		lines.append("%s %d" % [Powerup.curse_name(p.curse), (p.curse_ticks + C.TICK_HZ - 1) / C.TICK_HZ])
+
+	if not p.alive:
+		# Ceiling, so the last visible number is 1 rather than 0.
+		lines.append("back in %d" % ((p.respawn_ticks + C.TICK_HZ - 1) / C.TICK_HZ + 1))
+	elif p.spawn_protect_ticks > 0:
+		lines.append("SAFE")
+	return "\n".join(lines)
 
 func _format_clock(seconds: int) -> String:
 	return "%d:%02d" % [seconds / 60, seconds % 60]

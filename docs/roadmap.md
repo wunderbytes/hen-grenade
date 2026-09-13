@@ -27,6 +27,8 @@ Each milestone ends in something runnable on **both** targets. Estimates assume 
 
 ## M1 — Core simulation *(~2 weeks)*
 
+Implementation detail is in the [Milestone 1 build brief](milestone-1-brief.md); see also the [M1 completion notes](progress/m1-completion.md).
+
 The rule set, headless and tested, with programmer-art rendering on top.
 
 - Fixed 60 Hz sim loop, fixed-point positions, seeded PRNG, `step(state, inputs) -> events`.
@@ -42,6 +44,8 @@ The rule set, headless and tested, with programmer-art rendering on top.
 
 ## M2 — Players, controllers, and the lobby *(~1.5 weeks)*
 
+Implementation detail is in the [Milestone 2 build brief](milestone-2-brief.md); see also the [M2 completion notes](progress/m2-completion.md).
+
 - Device manager: press-A-to-join, slot binding by GUID, keyboard slots, hot-plug pause and reconnect flow.
 - Lobby screen: four slots, each empty / human / bot, and start. No mode select — free-for-all is the only mode.
 - Four-player round working end to end on real hardware.
@@ -52,6 +56,8 @@ The rule set, headless and tested, with programmer-art rendering on top.
 ---
 
 ## M3 — Power-ups, economy, and match flow *(~2 weeks)*
+
+Implementation detail is in the [Milestone 3 build brief](milestone-3-brief.md); what was built and what is still owed is in the [M3 completion notes](progress/m3-completion.md).
 
 - Power-up drops, the full table, caps.
 - Kick, Toss, Remote, and the Dud curse variants.

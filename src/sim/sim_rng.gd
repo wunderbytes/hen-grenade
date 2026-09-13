@@ -56,6 +56,18 @@ func next_below(n: int) -> int:
 		return 0
 	return next_u32() % n
 
+## Index into a list of `n` items, **always spending exactly one draw** — which
+## is the difference from next_below(), whose n <= 1 short-circuit spends none.
+##
+## Use this wherever the *number* of draws is part of the determinism contract
+## rather than just the values: the power-up table's weighted pick, and the crate
+## regeneration wave. Both can legitimately face a one-entry list — a table tuned
+## to a single power-up, or an arena down to its last candidate tile — and a draw
+## that quietly does not happen would shift every subsequent value.
+func next_index(n: int) -> int:
+	var raw: int = next_u32()
+	return 0 if n <= 1 else raw % n
+
 ## Integer in [lo, hi], inclusive.
 func next_range(lo: int, hi: int) -> int:
 	if hi <= lo:

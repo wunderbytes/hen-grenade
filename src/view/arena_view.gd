@@ -29,6 +29,17 @@ func sync(arena: Arena) -> void:
 func clear_crate(tile: Vector2i) -> void:
 	set_cell(tile, 0, Vector2i(PlaceholderTileset.FLOOR, 0))
 
+## Single-cell update in response to a CRATE_SPAWNED event — a crate-regeneration
+## wave landing (M3 brief §5). Deliberately the same one-cell path as
+## `clear_crate`: a wave of six crates costs six cell writes, not a rebuild, and
+## the arena is still never redrawn per frame.
+##
+## Game design §6.2 asks for a short landing animation. That is an M4 job and it
+## belongs here rather than in the simulation, which is why the sim places the
+## crate immediately and merely says so in an event.
+func set_crate(tile: Vector2i) -> void:
+	set_cell(tile, 0, Vector2i(PlaceholderTileset.CRATE, 0))
+
 func _atlas_for(tile_type: int) -> int:
 	match tile_type:
 		Arena.Tile.HARD: return PlaceholderTileset.HARD

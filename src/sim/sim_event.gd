@@ -20,6 +20,15 @@ enum Kind {
 	PLAYER_DIED,
 	PLAYER_RESPAWNED,
 	ROUND_ENDED,
+	# --- M3 ---
+	CRATE_SPAWNED,
+	PICKUP_SPAWNED,
+	PICKUP_TAKEN,
+	PICKUP_DESTROYED,
+	BOMB_KICKED,
+	BOMB_TOSSED,
+	CURSE_APPLIED,
+	CURSE_EXPIRED,
 }
 
 var kind: Kind = Kind.FLAME_LIT
@@ -30,6 +39,10 @@ var player: int = -1
 var other: int = -1
 ## Generic payload; see each constructor.
 var value: int = 0
+## Where a bomb went, for the two M3 events that move one. (-1, -1) otherwise.
+## A sixth field rather than an encoded tile index, because the alternative is a
+## view that has to know the grid width to read an event.
+var to_tile: Vector2i = Vector2i(-1, -1)
 
 static func _make(p_kind: Kind, p_tile: Vector2i, p_player: int, p_other: int, p_value: int) -> SimEvent:
 	var e: SimEvent = SimEvent.new()
@@ -70,6 +83,50 @@ static func player_respawned(tile: Vector2i, player: int, protect_ticks: int) ->
 ## The clock hit zero. `player` is the winning slot, or -1 for a draw.
 static func round_ended(winner: int) -> SimEvent:
 	return _make(Kind.ROUND_ENDED, Vector2i.ZERO, winner, -1, 0)
+
+# --- M3 ---------------------------------------------------------------------
+
+## A regeneration wave landed a crate on `tile` (M3 brief §5). The view updates
+## that one tilemap cell, exactly as it does for CRATE_DESTROYED.
+static func crate_spawned(tile: Vector2i) -> SimEvent:
+	return _make(Kind.CRATE_SPAWNED, tile, -1, -1, 0)
+
+## A pickup of `value` (Powerup.Kind) appeared on `tile`. `player` is who lost it
+## in a kit scatter, or -1 for a crate drop; `other` is the Powerup.Curse variant
+## for a Dud and 0 otherwise.
+static func pickup_spawned(tile: Vector2i, kind_value: int, curse: int, from_player: int) -> SimEvent:
+	return _make(Kind.PICKUP_SPAWNED, tile, from_player, curse, kind_value)
+
+## `player` walked onto the pickup of `value` (Powerup.Kind) on `tile`; `other`
+## is the curse variant for a Dud.
+static func pickup_taken(tile: Vector2i, player: int, kind_value: int, curse: int) -> SimEvent:
+	return _make(Kind.PICKUP_TAKEN, tile, player, curse, kind_value)
+
+## A blast owned by `player` burnt the pickup of `value` off `tile`.
+static func pickup_destroyed(tile: Vector2i, player: int, kind_value: int) -> SimEvent:
+	return _make(Kind.PICKUP_DESTROYED, tile, player, -1, kind_value)
+
+## `player` kicked the bomb on `tile`; `to_tile` is the tile it will step to next.
+static func bomb_kicked(tile: Vector2i, to: Vector2i, player: int) -> SimEvent:
+	var e: SimEvent = _make(Kind.BOMB_KICKED, tile, player, -1, 0)
+	e.to_tile = to
+	return e
+
+## `player` lobbed a bomb from `tile` to `to_tile`. The flight is instantaneous
+## in the simulation; the arc is the view's business (M3 brief §4.2).
+static func bomb_tossed(tile: Vector2i, to: Vector2i, player: int) -> SimEvent:
+	var e: SimEvent = _make(Kind.BOMB_TOSSED, tile, player, -1, 0)
+	e.to_tile = to
+	return e
+
+## `player` picked up a Dud: `value` is the Powerup.Curse variant and `other` its
+## duration in ticks.
+static func curse_applied(tile: Vector2i, player: int, curse: int, ticks: int) -> SimEvent:
+	return _make(Kind.CURSE_APPLIED, tile, player, ticks, curse)
+
+## `player`'s curse ran out. `value` is the variant that ended.
+static func curse_expired(player: int, curse: int) -> SimEvent:
+	return _make(Kind.CURSE_EXPIRED, Vector2i.ZERO, player, -1, curse)
 
 func _to_string() -> String:
 	return "SimEvent(%s tile=%s player=%d other=%d value=%d)" % [Kind.keys()[kind], str(tile), player, other, value]

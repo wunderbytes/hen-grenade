@@ -15,11 +15,30 @@ var radius: int = 1
 ## is still walking the array.
 var exploded: bool = false
 
+## Placed by a Remote holder: it has no fuse and waits for the button. `fuse_ticks`
+## is left alone rather than sentinelled, so losing Remote can simply clear this
+## flag and the bomb arms itself with whatever fuse it is given (M3 brief §4.3).
+var remote: bool = false
+
+## A kicked bomb in motion. ZERO when still. The bomb stays **tile-quantised**
+## and advances a whole tile every `kick_ticks_per_tile` ticks, because every
+## rule that touches a bomb indexes it by tile; `slide_ticks` counts down to the
+## next step and is what the view would interpolate from (M3 brief §4.1).
+var slide_dir: Vector2i = Vector2i.ZERO
+var slide_ticks: int = 0
+
 func _init(p_tile: Vector2i = Vector2i.ZERO, p_owner: int = -1, p_fuse: int = 0, p_radius: int = 1) -> void:
 	tile = p_tile
 	owner = p_owner
 	fuse_ticks = p_fuse
 	radius = p_radius
+
+func is_sliding() -> bool:
+	return slide_dir != Vector2i.ZERO
+
+func stop_sliding() -> void:
+	slide_dir = Vector2i.ZERO
+	slide_ticks = 0
 
 func mix_into(h: int) -> int:
 	var acc: int = SimHash.mix_vec(h, tile)
@@ -27,4 +46,7 @@ func mix_into(h: int) -> int:
 	acc = SimHash.mix_int(acc, fuse_ticks)
 	acc = SimHash.mix_int(acc, radius)
 	acc = SimHash.mix_bool(acc, exploded)
+	acc = SimHash.mix_bool(acc, remote)
+	acc = SimHash.mix_vec(acc, slide_dir)
+	acc = SimHash.mix_int(acc, slide_ticks)
 	return acc
