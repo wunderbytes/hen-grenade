@@ -2,7 +2,7 @@
 
 A local-multiplayer, Bomberman-style arena battler for **Windows** and **Raspberry Pi**, built for four people on one couch with four gamepads.
 
-> **Status: Milestone 3.5 code complete, headless-verified.** The hardware spike passed on a real Pi 400 (M0), the rule set exists and is unit-tested headless (M1), there is a lobby with four-player joining, hot-plug handling and a pause menu (M2), the economy is in (M3), and the namesake **Hen Grenade** mode is playable from the lobby (M3.5): 5:00, one token, most time as the Hen wins. Deathmatch is still the default. M3 still owes a four-person playtest. Presentation, bots, and a theme decision are ahead — see the [roadmap](docs/roadmap.md).
+> **Status: Milestone 3.6 in progress.** The hardware spike passed on a real Pi 400 (M0), the rule set exists and is unit-tested headless (M1), there is a lobby with four-player joining, hot-plug handling and a pause menu (M2), the economy is in (M3), the namesake **Hen Grenade** mode is playable from the lobby (M3.5), and seated players can dress a hunter (hat / clothes / shoes) on the lobby card (M3.6). Deathmatch is still the default. M3 still owes a four-person playtest. Final art, bots, and a theme decision are ahead — see the [roadmap](docs/roadmap.md).
 
 ## Playing it
 
@@ -20,9 +20,11 @@ Two players minimum, four maximum, any mix of humans and (placeholder) bots.
 
 `Y` / `X` add and drop a bot (`B` / `N` on the keyboard). **LB / RB** (or `[` / `]`
 on the keyboard) cycles **DEATHMATCH** and **HEN GRENADE**. Leaving the chips
-alone stays deathmatch. **`START` on a pad or `Enter` on the keyboard begins
-the round**. So the shortest keyboard-only route from launch to playing is
-`Space`, `Right Ctrl`, `Enter`.
+alone stays deathmatch. Seated players cycle **hat / clothes / shoes** with the
+D-pad (or `WASD` / arrow keys on the keyboard seats). Colour stays red / blue /
+yellow / green. **`START` on a pad or `Enter` on the keyboard begins the round**.
+So the shortest keyboard-only route from launch to playing is `Space`,
+`Right Ctrl`, `Enter`.
 
 In a round, `START` or `Esc` pauses — resume, restart, or quit to the lobby —
 and unplugging a controller pauses the game until it comes back.
@@ -53,7 +55,7 @@ Every round is recorded to `user://replays/` as a seed plus an input log — abo
 bug report" practical.
 
 ```bash
-# Run the test suite headless (19 suites, 265 tests)
+# Run the test suite headless (20 suites, 275 tests)
 godot --headless --script res://tests/run_tests.gd
 
 # Load and step every scene, the way CI does
@@ -103,6 +105,7 @@ The tone is light and playful, but **the theme and the final title are deliberat
 | [Milestone 2 build brief](docs/milestone-2-brief.md) | The executable spec for players and controllers: the slot model, join and menu input, the two hot-plug policies, the lobby, and the round lifecycle |
 | [Milestone 3 build brief](docs/milestone-3-brief.md) | The executable spec for the economy: the power-up table, the three abilities and the curse, kit loss on death, crate regeneration, best-of-3, and the PRNG draw-count rules that keep all of it deterministic |
 | [Milestone 3.5 build brief](docs/milestone-3.5-brief.md) | The executable spec for the namesake mode: lobby select, the Hen token, Hen constraints, time-as-Hen scoring, and the determinism rules that keep deathmatch goldens still |
+| [Milestone 3.6 build brief](docs/milestone-3.6-brief.md) | The executable spec for lobby dress-up: three cosmetic layers, per-device cycling, colour-locked hunter drawing, and a hen silhouette that does not wear the outfit |
 | [M0 completion notes](docs/progress/m0-completion.md) | What was implemented for M0 and the hardware pass result |
 | [M1 completion notes](docs/progress/m1-completion.md) | What was implemented for M1, what was verified, the rule decisions taken, and what is still owed |
 | [M2 completion notes](docs/progress/m2-completion.md) | What was implemented for M2, the input decisions taken, and the hardware checks still owed |

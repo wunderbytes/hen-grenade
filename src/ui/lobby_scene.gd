@@ -63,9 +63,9 @@ func _ready() -> void:
 	_status = _add_label(Vector2(C.VIEW_W / 2.0 - 80, 196), 10, Color(0.95, 0.95, 0.9), false)
 
 	var pad_help: Label = _add_label(Vector2(24, 222), 8, Color(0.62, 0.70, 0.62), false)
-	pad_help.text = "A join    B leave    Y add bot    X drop bot    LB/RB mode    START begin"
+	pad_help.text = "A join    B leave    D-pad look    Y bot    X drop    LB/RB mode    START begin"
 	var kb_help: Label = _add_label(Vector2(24, 236), 8, Color(0.52, 0.58, 0.52), false)
-	kb_help.text = "keyboard: SPACE / RIGHT CTRL join, Q / slash leave, B / N bots, [ ] mode, ENTER begin"
+	kb_help.text = "keyboard: SPACE / R-CTRL join, Q / slash leave, WASD / arrows look, B/N bots, [ ] mode, ENTER begin"
 
 	var legend: PowerupLegend = PowerupLegend.new()
 	legend.compact = false
@@ -99,6 +99,7 @@ func _physics_process(_delta: float) -> void:
 	# the match out from under the two already seated.
 	if DeviceManager.menu_pressed(DeviceManager.Menu.START) and DeviceManager.can_start():
 		get_tree().change_scene_to_file(MATCH_SCENE)
+	_apply_customize()
 
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
@@ -118,6 +119,21 @@ func _input(event: InputEvent) -> void:
 
 func _on_roster_changed() -> void:
 	_refresh()
+
+func _apply_customize() -> void:
+	var changed: bool = false
+	for i in range(C.MAX_PLAYERS):
+		var d: Vector2i = DeviceManager.customize_delta(i)
+		if d == Vector2i.ZERO:
+			continue
+		var slot: PlayerSlot = DeviceManager.slots[i]
+		if d.x != 0:
+			slot.cycle_layer(d.x)
+		if d.y != 0:
+			slot.cycle_option(d.y)
+		changed = true
+	if changed:
+		_refresh()
 
 func _refresh() -> void:
 	for i in range(C.MAX_PLAYERS):
@@ -167,6 +183,16 @@ func _draw() -> void:
 	for i in range(C.MAX_PLAYERS):
 		var occupied: bool = DeviceManager.slots[i].is_occupied()
 		draw_rect(_card_rect(i), C.PLAYER_COLORS[i] if occupied else EMPTY_EDGE, false, 1.0)
+	for i in range(C.MAX_PLAYERS):
+		var slot: PlayerSlot = DeviceManager.slots[i]
+		if not slot.is_occupied():
+			continue
+		var card: Rect2 = _card_rect(i)
+		var centre: Vector2 = Vector2(card.position.x + card.size.x - 28.0, card.position.y + 58.0)
+		var hi: int = slot.customize_layer if slot.is_human() else -1
+		CharacterArt.draw_hunter(
+			self, centre, i, slot.hat, slot.clothes, slot.shoes, 1.5, hi, InputFrame.Dir.DOWN
+		)
 
 func _chip_rect(i: int) -> Rect2:
 	return Rect2(CHIP_X0 + i * (CHIP_W + CHIP_GAP), CHIP_Y, CHIP_W, CHIP_H)

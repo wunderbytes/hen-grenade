@@ -73,6 +73,7 @@ func add_bot() -> int:
 	slot.kind = PlayerSlot.Kind.BOT
 	slot.source = BotSource.for_slot(i)
 	slot.connected = true
+	slot.apply_bot_look()
 	return i
 
 ## Drops the **last** bot, never a human's seat, so `Y` `Y` `X` is predictable.
@@ -114,7 +115,7 @@ func device_added(device_id: int, guid: String, pad_name: String) -> int:
 		return -1
 	var slot_index: int = int(waiting[0])
 	_forget_reservation(slot_index, guid)
-	_bind_pad(slot_index, device_id, guid, pad_name)
+	_bind_pad(slot_index, device_id, guid, pad_name, true)
 	return slot_index
 
 ## A pad vanished. Reserves its seat and returns the slot index, or -1 if that
@@ -143,7 +144,7 @@ func claim_awaiting(device_id: int, guid: String, pad_name: String) -> int:
 		return -1
 	var slot_index: int = int(waiting[0])
 	_forget_reservation(slot_index, guid)
-	_bind_pad(slot_index, device_id, guid, pad_name)
+	_bind_pad(slot_index, device_id, guid, pad_name, true)
 	return slot_index
 
 ## Frees every reserved seat and returns which ones it freed. Called on entering
@@ -208,8 +209,12 @@ func active_flags() -> Array[bool]:
 
 # --- Internals ---------------------------------------------------------------
 
-func _bind_pad(slot_index: int, device_id: int, guid: String, pad_name: String) -> void:
+func _bind_pad(slot_index: int, device_id: int, guid: String, pad_name: String, keep_look: bool = false) -> void:
 	var slot: PlayerSlot = slots[slot_index]
+	var hat: int = slot.hat
+	var clothes: int = slot.clothes
+	var shoes: int = slot.shoes
+	var layer: int = slot.customize_layer
 	slot.clear()
 	slot.kind = PlayerSlot.Kind.PAD
 	slot.pad_device = device_id
@@ -217,6 +222,11 @@ func _bind_pad(slot_index: int, device_id: int, guid: String, pad_name: String) 
 	slot.pad_name = pad_name
 	slot.source = GamepadSource.new(device_id, pad_name)
 	slot.connected = true
+	if keep_look:
+		slot.hat = hat
+		slot.clothes = clothes
+		slot.shoes = shoes
+		slot.customize_layer = layer
 
 func _reserve(slot_index: int, guid: String) -> void:
 	if not _awaiting.has(guid):

@@ -107,10 +107,7 @@ func _draw() -> void:
 			hen = p
 		else:
 			hunters.append(p)
-	for p in hunters:
-		draw_rect(_body_rect(p), _player_color(p.index), true)
-	for p in hunters:
-		draw_rect(_body_rect(p), Color.BLACK, false, 1.0)
+	_draw_hunters(hunters)
 	if hen != null:
 		_draw_hen(hen)
 	for p in shown:
@@ -159,12 +156,17 @@ func _draw_hen_token() -> void:
 	])
 	draw_colored_polygon(chevron, TOKEN_CHEVRON)
 
-## Larger oval plus a three-point comb, drawn after the hunter rects so the
-## hunter batch stays a rect pass (Appendix A.12). Slot colour stays on the
-## outline so P2-as-Hen is still blue.
+## Larger oval, comb, beak, tail and legs — a hen silhouette, not a dressed
+## hunter. Slot colour stays the fill so P2-as-Hen is still blue.
 func _draw_hen(p: PlayerState) -> void:
 	var c: Vector2 = _pos_px(p.pos)
-	draw_circle(c, HEN_BODY_R, _player_color(p.index))
+	var col: Color = _player_color(p.index)
+	var face: Vector2 = Vector2(Sim.dir_vec(p.facing))
+	if face == Vector2.ZERO:
+		face = Vector2(0, 1)
+	draw_set_transform(c, 0.0, Vector2(1.15, 0.85))
+	draw_circle(Vector2.ZERO, HEN_BODY_R, col)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	var comb: PackedVector2Array = PackedVector2Array([
 		c + Vector2(-6, -HEN_BODY_R + 2),
 		c + Vector2(-4, -HEN_BODY_R - 5),
@@ -174,8 +176,57 @@ func _draw_hen(p: PlayerState) -> void:
 		c + Vector2(4, -HEN_BODY_R - 5),
 		c + Vector2(6, -HEN_BODY_R + 2),
 	])
-	draw_colored_polygon(comb, _player_color(p.index))
-	draw_arc(c, HEN_BODY_R, 0.0, TAU, 16, Color.BLACK, 1.0)
+	draw_colored_polygon(comb, col)
+	var beak: PackedVector2Array = PackedVector2Array([
+		c + face * (HEN_BODY_R + 1.0),
+		c + face * (HEN_BODY_R - 2.0) + Vector2(-face.y, face.x) * 3.0,
+		c + face * (HEN_BODY_R - 2.0) + Vector2(face.y, -face.x) * 3.0,
+	])
+	draw_colored_polygon(beak, col)
+	var tail_dir: Vector2 = -face
+	var tail: PackedVector2Array = PackedVector2Array([
+		c + tail_dir * (HEN_BODY_R - 1.0),
+		c + tail_dir * (HEN_BODY_R + 5.0) + Vector2(-tail_dir.y, tail_dir.x) * 3.0,
+		c + tail_dir * (HEN_BODY_R + 5.0) + Vector2(tail_dir.y, -tail_dir.x) * 3.0,
+	])
+	draw_colored_polygon(tail, col)
+	var side: Vector2 = Vector2(-face.y, face.x)
+	draw_rect(Rect2(c + Vector2(-2, HEN_BODY_R - 1) + side * 3.0, Vector2(2, 4)), col, true)
+	draw_rect(Rect2(c + Vector2(-2, HEN_BODY_R - 1) - side * 3.0, Vector2(2, 4)), col, true)
+	draw_set_transform(c, 0.0, Vector2(1.15, 0.85))
+	draw_arc(Vector2.ZERO, HEN_BODY_R, 0.0, TAU, 16, Color.BLACK, 1.0)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+func _draw_hunters(hunters: Array[PlayerState]) -> void:
+	if hunters.is_empty():
+		return
+	var centres := PackedVector2Array()
+	var slots := PackedInt32Array()
+	var hats := PackedInt32Array()
+	var clothes := PackedInt32Array()
+	var shoes := PackedInt32Array()
+	var facings := PackedInt32Array()
+	centres.resize(hunters.size())
+	slots.resize(hunters.size())
+	hats.resize(hunters.size())
+	clothes.resize(hunters.size())
+	shoes.resize(hunters.size())
+	facings.resize(hunters.size())
+	for i in range(hunters.size()):
+		var p: PlayerState = hunters[i]
+		centres[i] = _pos_px(p.pos)
+		slots[i] = p.index
+		var look: PlayerSlot = _look(p.index)
+		hats[i] = look.hat if look != null else 0
+		clothes[i] = look.clothes if look != null else 0
+		shoes[i] = look.shoes if look != null else 0
+		facings[i] = int(p.facing)
+	CharacterArt.draw_hunters(self, centres, slots, hats, clothes, shoes, 1.0, PackedInt32Array(), facings)
+
+func _look(index: int) -> PlayerSlot:
+	if index < 0 or index >= DeviceManager.slots.size():
+		return null
+	return DeviceManager.slots[index]
 
 func _collect_flames(out_rects: Array[Rect2], out_ages: PackedFloat32Array) -> void:
 	var arena: Arena = state.arena
@@ -192,10 +243,6 @@ func _collect_flames(out_rects: Array[Rect2], out_ages: PackedFloat32Array) -> v
 
 func _urgency(b: Bomb) -> float:
 	return 1.0 - clampf(float(b.fuse_ticks) / float(maxi(1, state.balance.bomb_fuse_ticks)), 0.0, 1.0)
-
-func _body_rect(p: PlayerState) -> Rect2:
-	var centre: Vector2 = _pos_px(p.pos)
-	return Rect2(centre.x - PLAYER_HALF, centre.y - PLAYER_HALF, PLAYER_HALF * 2.0, PLAYER_HALF * 2.0)
 
 func _tile_px(tile: Vector2i) -> Vector2:
 	return Vector2(tile.x * C.TILE_PX + C.TILE_PX / 2.0, tile.y * C.TILE_PX + C.TILE_PX / 2.0)

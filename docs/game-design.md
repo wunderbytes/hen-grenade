@@ -166,6 +166,7 @@ The token is not a power-up. It never comes out of a crate, it does not share th
 ## 8. Presentation
 
 - **Pixel art**, 20 × 20 px tiles, with 4-colour-plus-outline character palettes so the four players read instantly as red / blue / yellow / green even at a distance.
+- **Lobby dress-up (M3.6).** Seated players pick a hat, clothes, and shoes/accessory on their lobby card. The look is sofa-local (no unlocks, no save file) and draws on hunters in a round. The body fill stays that player’s main colour; overlays are shades of the same hue. The Hen is a different *shape*, not a fifth palette, and does not wear the hunter outfit.
 - Base render resolution **640 × 360**, integer-scaled to the display (×2 at 720p, ×3 at 1080p). Nearest-neighbour filtering, no sub-pixel camera movement.
 - Layout: the 500 × 300 arena centred, a **70 px HUD panel down each side** carrying two player cards each (score or hen-seconds, bombs, blast, speed, abilities, respawn countdown), and the **round clock** centred in the top band. The clock changes colour and ticks audibly for the last 10 seconds. In Hen Grenade the clock also names who is the Hen, or that the token is still on the floor.
 - The whole arena is always on screen. No camera work, no split screen.
@@ -179,13 +180,13 @@ The token is not a power-up. It never comes out of a crate, it does not share th
 - **Team battle**, and every mode besides deathmatch and Hen Grenade.
 - **Per-match power-up presets** in the lobby. One balanced default rule set per mode.
 - Elimination-style rounds, a shrinking arena, sudden death, or a health system. The clock is the only round-ending mechanism (2:00 or 5:00, depending on mode).
-- Single-player campaign, story, unlocks, progression, or cosmetics economy.
+- Single-player campaign, story, unlocks, progression, or cosmetics economy. Lobby dress-up (M3.6) is free sofa customization, not a shop.
 - 3D, dynamic lighting, or anything else that spends the Pi's modest GPU budget on things that do not improve a two-minute round.
 - More than four players. Four USB pads and one screen is the target living room.
 
 ## 10. Open design questions
 
-1. **Theme and title.** Deliberately open. The tone is light and playful; the setting is not chosen. Mechanically nothing depends on it, but art production does, so this needs an answer **before Milestone 4** — everything up to and including M3.5 can run on programmer art. Whatever we pick must survive the readability pillar: four instantly distinguishable player silhouettes (and a fifth Hen silhouette that is a *shape* change, not a fifth hue) and blast lines you can read at a glance.
+1. **Theme and title.** Deliberately open. The tone is light and playful; the setting is not chosen. Mechanically nothing depends on it, but art production does, so this needs an answer **before Milestone 4** — everything up to and including M3.6 can run on programmer art. Whatever we pick must survive the readability pillar: four instantly distinguishable player silhouettes (and a fifth Hen silhouette that is a *shape* change, not a fifth hue) and blast lines you can read at a glance.
 2. **Does the 23 × 13 interior play too large for four players?** (§4) First playtest question, cheap to change.
 3. **How much kit should a death cost?** (§6.1) Half is a starting guess, not a considered answer.
 4. **Crate regeneration or periodic power-up drops?** (§6.2) Depends on whether regenerating crates feel like a fair part of the arena or like random interference.

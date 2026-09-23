@@ -62,6 +62,11 @@ var _slot_leave_prev: Array[bool] = []    # per slot
 var _menu_now: Array[bool] = []
 var _menu_prev: Array[bool] = []
 var _menu_dir: InputFrame.Dir = InputFrame.Dir.NONE
+## Per-slot last customize direction (InputFrame.Dir as int) and this frame's
+## (layer_delta, option_delta). Aggregated menu_dir is the wrong tool: any pad's
+## stick would cycle every outfit at once.
+var _customize_prev: Array[int] = []
+var _customize_delta: Array[Vector2i] = []
 
 func _ready() -> void:
 	binder = DeviceBinder.new(C.MAX_PLAYERS)
@@ -73,6 +78,10 @@ func _ready() -> void:
 	_menu_now.fill(false)
 	_menu_prev.resize(MENU_COUNT)
 	_menu_prev.fill(false)
+	_customize_prev.resize(C.MAX_PLAYERS)
+	_customize_prev.fill(int(InputFrame.Dir.NONE))
+	_customize_delta.resize(C.MAX_PLAYERS)
+	_customize_delta.fill(Vector2i.ZERO)
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	for id in Input.get_connected_joypads():
 		_register_pad(int(id))
@@ -88,6 +97,7 @@ func _physics_process(_delta: float) -> void:
 	_update_pad_joins()
 	_update_keyboard_joins()
 	_update_leaves()
+	_update_customize()
 
 # --- Public API --------------------------------------------------------------
 
@@ -186,6 +196,13 @@ func menu_pressed(action: Menu) -> bool:
 func menu_dir() -> InputFrame.Dir:
 	return _menu_dir
 
+## Lobby-only: (layer_delta, option_delta) on the frame this slot's device
+## pressed a direction. Zero if empty, bot, disconnected, or not in the lobby.
+func customize_delta(slot_index: int) -> Vector2i:
+	if slot_index < 0 or slot_index >= _customize_delta.size():
+		return Vector2i.ZERO
+	return _customize_delta[slot_index]
+
 func _update_menu() -> void:
 	for i in range(MENU_COUNT):
 		_menu_prev[i] = _menu_now[i]
@@ -256,6 +273,7 @@ func _register_pad(device_id: int) -> void:
 	var slot_index: int = binder.device_added(device_id, guid, pad_name)
 	if slot_index >= 0:
 		_seed_leave_edge(slot_index)
+		_seed_customize_edge(slot_index)
 		slot_reconnected.emit(slot_index)
 		roster_changed.emit()
 
@@ -300,6 +318,7 @@ func _update_pad_joins() -> void:
 		var slot_index: int = binder.claim_awaiting(device_id, guid, pad_name)
 		if slot_index >= 0:
 			_seed_leave_edge(slot_index)
+			_seed_customize_edge(slot_index)
 			slot_reconnected.emit(slot_index)
 			roster_changed.emit()
 			continue
@@ -308,6 +327,7 @@ func _update_pad_joins() -> void:
 		slot_index = binder.join_pad(device_id, guid, pad_name)
 		if slot_index >= 0:
 			_seed_leave_edge(slot_index)
+			_seed_customize_edge(slot_index)
 			slot_bound.emit(slot_index, binder.slots[slot_index].source.label())
 			roster_changed.emit()
 
@@ -324,6 +344,7 @@ func _update_keyboard_joins() -> void:
 		var slot_index: int = binder.join_keyboard(layout)
 		if slot_index >= 0:
 			_seed_leave_edge(slot_index)
+			_seed_customize_edge(slot_index)
 			slot_bound.emit(slot_index, binder.slots[slot_index].source.label())
 			roster_changed.emit()
 
@@ -350,6 +371,86 @@ func _update_leaves() -> void:
 func _seed_leave_edge(slot_index: int) -> void:
 	if slot_index >= 0 and slot_index < _slot_leave_prev.size():
 		_slot_leave_prev[slot_index] = _slot_leave_pressed(binder.slots[slot_index])
+
+func _seed_customize_edge(slot_index: int) -> void:
+	if slot_index < 0 or slot_index >= _customize_prev.size():
+		return
+	_customize_prev[slot_index] = int(_read_customize_dir(binder.slots[slot_index]))
+	_customize_delta[slot_index] = Vector2i.ZERO
+
+## Track always, fire only in the lobby on a fresh direction from a seated human.
+func _update_customize() -> void:
+	for i in range(C.MAX_PLAYERS):
+		var slot: PlayerSlot = binder.slots[i]
+		var dir: int = int(_read_customize_dir(slot))
+		var was: int = _customize_prev[i]
+		_customize_prev[i] = dir
+		_customize_delta[i] = Vector2i.ZERO
+		if not join_enabled:
+			continue
+		if not slot.is_human() or not slot.connected:
+			continue
+		if dir == int(InputFrame.Dir.NONE) or dir == was:
+			continue
+		match dir:
+			int(InputFrame.Dir.UP):
+				_customize_delta[i] = Vector2i(-1, 0)
+			int(InputFrame.Dir.DOWN):
+				_customize_delta[i] = Vector2i(1, 0)
+			int(InputFrame.Dir.LEFT):
+				_customize_delta[i] = Vector2i(0, -1)
+			int(InputFrame.Dir.RIGHT):
+				_customize_delta[i] = Vector2i(0, 1)
+
+func _read_customize_dir(slot: PlayerSlot) -> InputFrame.Dir:
+	match slot.kind:
+		PlayerSlot.Kind.PAD:
+			if not slot.connected or slot.pad_device < 0:
+				return InputFrame.Dir.NONE
+			return _pad_customize_dir(slot.pad_device)
+		PlayerSlot.Kind.KEYBOARD:
+			return _kb_customize_dir(slot.kb_layout)
+	return InputFrame.Dir.NONE
+
+func _pad_customize_dir(device_id: int) -> InputFrame.Dir:
+	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_UP):
+		return InputFrame.Dir.UP
+	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_DOWN):
+		return InputFrame.Dir.DOWN
+	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_LEFT):
+		return InputFrame.Dir.LEFT
+	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_RIGHT):
+		return InputFrame.Dir.RIGHT
+	var x: float = Input.get_joy_axis(device_id, JOY_AXIS_LEFT_X)
+	var y: float = Input.get_joy_axis(device_id, JOY_AXIS_LEFT_Y)
+	var ax: float = absf(x)
+	var ay: float = absf(y)
+	if ax < GamepadSource.ENGAGE_THRESHOLD and ay < GamepadSource.ENGAGE_THRESHOLD:
+		return InputFrame.Dir.NONE
+	if ax >= ay:
+		return InputFrame.Dir.RIGHT if x > 0.0 else InputFrame.Dir.LEFT
+	return InputFrame.Dir.DOWN if y > 0.0 else InputFrame.Dir.UP
+
+func _kb_customize_dir(layout: int) -> InputFrame.Dir:
+	if layout == KeyboardSource.Layout.WASD:
+		if Input.is_key_pressed(KEY_W):
+			return InputFrame.Dir.UP
+		if Input.is_key_pressed(KEY_S):
+			return InputFrame.Dir.DOWN
+		if Input.is_key_pressed(KEY_A):
+			return InputFrame.Dir.LEFT
+		if Input.is_key_pressed(KEY_D):
+			return InputFrame.Dir.RIGHT
+		return InputFrame.Dir.NONE
+	if Input.is_key_pressed(KEY_UP):
+		return InputFrame.Dir.UP
+	if Input.is_key_pressed(KEY_DOWN):
+		return InputFrame.Dir.DOWN
+	if Input.is_key_pressed(KEY_LEFT):
+		return InputFrame.Dir.LEFT
+	if Input.is_key_pressed(KEY_RIGHT):
+		return InputFrame.Dir.RIGHT
+	return InputFrame.Dir.NONE
 
 func _slot_leave_pressed(slot: PlayerSlot) -> bool:
 	match slot.kind:

@@ -25,7 +25,7 @@ func _ready() -> void:
 		_run_measure()
 		return
 	_add_label("HEN GRENADE", Vector2(C.VIEW_W / 2.0 - 70, C.VIEW_H / 2.0 - 24), 16, Color(0.95, 0.95, 0.9))
-	_add_label("M3.5 — Hen Grenade", Vector2(C.VIEW_W / 2.0 - 70, C.VIEW_H / 2.0 - 4), 8, Color(0.7, 0.8, 0.7))
+	_add_label("M3.6 — Customize", Vector2(C.VIEW_W / 2.0 - 70, C.VIEW_H / 2.0 - 4), 8, Color(0.7, 0.8, 0.7))
 	_add_label("pads join with A · keyboard with Space / Right Ctrl", Vector2(C.VIEW_W / 2.0 - 148, C.VIEW_H / 2.0 + 12), 8, Color(0.7, 0.75, 0.7))
 	_add_label("SPACE lobby   F2 stress   F3 sandbox", Vector2(C.VIEW_W / 2.0 - 112, C.VIEW_H / 2.0 + 30), 8, Color(0.6, 0.7, 0.6))
 	await get_tree().create_timer(TITLE_SECONDS).timeout

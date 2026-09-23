@@ -71,6 +71,46 @@ func test_leaving_frees_the_seat_for_the_next_join() -> void:
 	assert_eq(binder.occupied_count(), 1)
 	assert_eq(_join(7), 0, "the freed seat is the first free seat")
 
+func test_leave_resets_the_outfit() -> void:
+	_join(0)
+	binder.slots[0].hat = 2
+	binder.slots[0].clothes = 1
+	binder.slots[0].shoes = 3
+	assert_true(binder.leave(0))
+	assert_eq(binder.slots[0].hat, 0)
+	assert_eq(binder.slots[0].clothes, 0)
+	assert_eq(binder.slots[0].shoes, 0)
+	_join(0)
+	assert_eq(binder.slots[0].hat, 0, "the next joiner does not inherit a hat")
+
+func test_reconnect_keeps_the_outfit() -> void:
+	_join(0)
+	binder.slots[0].hat = 2
+	binder.slots[0].clothes = 3
+	binder.slots[0].shoes = 1
+	binder.device_removed(0)
+	assert_eq(binder.slots[0].hat, 2, "a reserved seat is not a leave")
+	assert_eq(binder.device_added(6, F310_GUID, F310_NAME), 0)
+	assert_eq(binder.slots[0].hat, 2)
+	assert_eq(binder.slots[0].clothes, 3)
+	assert_eq(binder.slots[0].shoes, 1)
+
+func test_claim_awaiting_keeps_the_outfit() -> void:
+	_join(0)
+	_join(1)
+	binder.slots[0].hat = 1
+	binder.device_removed(0)
+	binder.device_removed(1)
+	assert_eq(binder.claim_awaiting(4, F310_GUID, F310_NAME), 0)
+	assert_eq(binder.slots[0].hat, 1)
+
+func test_bots_get_distinct_looks() -> void:
+	assert_eq(binder.add_bot(), 0)
+	assert_eq(binder.add_bot(), 1)
+	assert_ne(binder.slots[0].hat, binder.slots[1].hat)
+	assert_eq(binder.slots[0].hat, 0)
+	assert_eq(binder.slots[1].hat, 1)
+
 func test_leaving_an_empty_seat_does_nothing() -> void:
 	assert_false(binder.leave(2))
 	assert_false(binder.leave(-1), "out of range must not crash or claim")

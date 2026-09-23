@@ -86,9 +86,21 @@ Implementation detail is in the [Milestone 3.5 build brief](milestone-3.5-brief.
 
 ---
 
+## M3.6 — Lobby character customization *(~0.5 week)*
+
+Implementation detail is in the [Milestone 3.6 build brief](milestone-3.6-brief.md). View-only. Theme still open; the pieces are geometric placeholders M4 can replace.
+
+- Lobby: each seated human cycles head/hat, clothes, and shoes/accessory on their own card (D-pad / WASD / arrows). Slot colour stays the body.
+- Hunters draw that look in a round. The Hen does not wear the outfit; it keeps a hen silhouette in the same colour.
+- Looks live on `PlayerSlot`. Leave resets. Reconnect keeps. Nothing in the sim or the replay.
+
+**Exit criteria:** two people can dress independently in the lobby and see those hunters in a round; P2 is still blue; deathmatch golden state hashes are identical to M3.5.
+
+---
+
 ## M4 — Presentation *(~3 weeks, the long pole)*
 
-**Entry gate: the theme has to be decided before this milestone starts.** It is intentionally open through M0–M3.5 (light and playful is the only constraint so far) because nothing before this point depends on it — programmer art carries us all the way through the first real playtest and through the namesake mode. Nothing in M4 can start without it.
+**Entry gate: the theme has to be decided before this milestone starts.** It is intentionally open through M0–M3.6 (light and playful is the only constraint so far) because nothing before this point depends on it — programmer art carries us all the way through the first real playtest, the namesake mode, and sofa dress-up. Nothing in M4 can start without it.
 
 - Final tileset and four character sheets with animations (idle, walk ×4, drop, death).
 - Blast, smoke, pickup, and death effects within the Pi budget.

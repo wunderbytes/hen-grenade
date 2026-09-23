@@ -13,6 +13,9 @@ class_name PlayerSlot
 
 enum Kind { EMPTY = 0, PAD = 1, KEYBOARD = 2, BOT = 3 }
 
+const LOOK_OPTIONS: int = 4
+const LOOK_LAYERS: int = 3
+
 var index: int = -1
 var kind: Kind = Kind.EMPTY
 var source: InputSource = null
@@ -31,6 +34,13 @@ var pad_name: String = ""
 
 ## Which KeyboardSource.Layout claimed this slot, or -1.
 var kb_layout: int = -1
+
+## View-only hunter outfit. The sim never sees these. See docs/milestone-3.6-brief.md.
+var hat: int = 0
+var clothes: int = 0
+var shoes: int = 0
+## 0 head, 1 clothes, 2 shoes — same order as CharacterArt.Layer.
+var customize_layer: int = 0
 
 func _init(p_index: int = -1) -> void:
 	index = p_index
@@ -59,6 +69,33 @@ func clear() -> void:
 	pad_guid = ""
 	pad_name = ""
 	kb_layout = -1
+	hat = 0
+	clothes = 0
+	shoes = 0
+	customize_layer = 0
+
+## Placeholder bots cannot cycle; give each seat a distinct default so four
+## wanderers are not identical. Derived from index, no RNG.
+func apply_bot_look() -> void:
+	hat = posmod(index, LOOK_OPTIONS)
+	clothes = posmod(index + 1, LOOK_OPTIONS)
+	shoes = posmod(index + 2, LOOK_OPTIONS)
+	customize_layer = 0
+
+func cycle_layer(delta: int) -> void:
+	customize_layer = posmod(customize_layer + delta, LOOK_LAYERS)
+
+func cycle_option(delta: int) -> void:
+	match customize_layer:
+		0:
+			hat = posmod(hat + delta, LOOK_OPTIONS)
+		1:
+			clothes = posmod(clothes + delta, LOOK_OPTIONS)
+		2:
+			shoes = posmod(shoes + delta, LOOK_OPTIONS)
+
+static func wrap_look(value: int, count: int) -> int:
+	return posmod(value, count) if count > 0 else 0
 
 # --- Polling ----------------------------------------------------------------
 
