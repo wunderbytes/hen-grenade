@@ -13,7 +13,11 @@ class_name PlayerSlot
 
 enum Kind { EMPTY = 0, PAD = 1, KEYBOARD = 2, BOT = 3 }
 
-const LOOK_OPTIONS: int = 4
+## Per layer. Head and clothes grew past the original four; shoes stayed at four
+## once the invisible ones were redrawn. See CharacterArt's name tables.
+const HEAD_OPTIONS: int = 9
+const CLOTHES_OPTIONS: int = 7
+const SHOES_OPTIONS: int = 4
 const LOOK_LAYERS: int = 3
 
 var index: int = -1
@@ -77,22 +81,35 @@ func clear() -> void:
 ## Placeholder bots cannot cycle; give each seat a distinct default so four
 ## wanderers are not identical. Derived from index, no RNG.
 func apply_bot_look() -> void:
-	hat = posmod(index, LOOK_OPTIONS)
-	clothes = posmod(index + 1, LOOK_OPTIONS)
-	shoes = posmod(index + 2, LOOK_OPTIONS)
+	hat = posmod(index, HEAD_OPTIONS)
+	clothes = posmod(index + 1, CLOTHES_OPTIONS)
+	shoes = posmod(index + 2, SHOES_OPTIONS)
 	customize_layer = 0
 
 func cycle_layer(delta: int) -> void:
 	customize_layer = posmod(customize_layer + delta, LOOK_LAYERS)
 
 func cycle_option(delta: int) -> void:
+	var count: int = look_count(customize_layer)
+	if count <= 0:
+		return
 	match customize_layer:
 		0:
-			hat = posmod(hat + delta, LOOK_OPTIONS)
+			hat = posmod(hat + delta, count)
 		1:
-			clothes = posmod(clothes + delta, LOOK_OPTIONS)
+			clothes = posmod(clothes + delta, count)
 		2:
-			shoes = posmod(shoes + delta, LOOK_OPTIONS)
+			shoes = posmod(shoes + delta, count)
+
+static func look_count(layer: int) -> int:
+	match layer:
+		0:
+			return HEAD_OPTIONS
+		1:
+			return CLOTHES_OPTIONS
+		2:
+			return SHOES_OPTIONS
+	return 0
 
 static func wrap_look(value: int, count: int) -> int:
 	return posmod(value, count) if count > 0 else 0

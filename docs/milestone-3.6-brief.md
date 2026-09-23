@@ -12,7 +12,7 @@ Players dress a hunter on the lobby card. That look draws in-match on hunters on
 
 **In scope**
 
-1. **Three cosmetic layers** on each seated player: head/hat, clothes, shoes/accessory. Four options per layer, including “none” on hat and shoes.
+1. **Three cosmetic layers** on each seated player: head/hat, clothes, shoes/accessory. Each layer has its own option count (head 9, clothes 7, shoes 4), including “none” on hat and shoes.
 2. **Lobby cycling** from the bound device: up/down selects the layer, left/right cycles the option. The device is still the cursor ([M2 brief §5](milestone-2-brief.md)).
 3. **Lobby preview and in-match hunter drawing** from one painter. Slot colour stays the body fill.
 4. **A clearer hen silhouette** (oval, comb, beak, tail, legs) in the same slot colour. No cosmetic layers on the Hen.
@@ -54,15 +54,15 @@ HUD cards stay text-only. Colour plus the in-arena body is enough.
 
 ## 3. Catalog
 
-Mechanical names, no theme fiction. Index 0 is the simplest look.
+Mechanical names, no theme fiction. Index 0 is the simplest look. Counts differ per layer; cycling wraps on that layer's own length.
 
-| Layer | 0 | 1 | 2 | 3 |
-|---|---|---|---|---|
-| Head | `NONE` | `CAP` | `CONE` | `BALL` |
-| Clothes | `TUNIC` | `VEST` | `OVERALLS` | `SASH` |
-| Shoes | `NONE` | `BOOTS` | `SNEAKERS` | `PACK` |
+| Layer | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|---|
+| Head | `NONE` | `CAP` | `CONE` | `BALL` | `EARS` | `MOHAWK` | `PROP` | `BOW` | `ANTENNA` |
+| Clothes | `TUNIC` | `VEST` | `OVERALLS` | `SASH` | `SKIRT` | `PLEATS` | `TUTU` | | |
+| Shoes | `NONE` | `BOOTS` | `SNEAKERS` | `PACK` | | | | | |
 
-Clothes always draw a body so the hunter stays a readable 14 × 14. Hat and shoes may be empty.
+Clothes always draw a body so the hunter stays a readable 14 × 14. Hat and shoes may be empty. Boots, sneakers, and the pack are drawn **outside** the body outline: a 1 px stroke is painted last and used to swallow anything that only occupied the bottom edge, and a downward-facing pack used to sit in the hat band.
 
 **Main colour is the body fill:** `C.PLAYER_COLORS[slot]`. Overlays are darker/lighter of the *same* hue plus a black outline and a cream accent. Never a second player colour.
 

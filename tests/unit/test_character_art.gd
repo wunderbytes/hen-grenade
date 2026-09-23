@@ -15,11 +15,19 @@ func test_wrap_index_cycles_both_ways() -> void:
 	assert_eq(Art.wrap_index(0, 0), 0, "empty modulus is a no-op, not a crash")
 
 func test_option_names_are_mechanical() -> void:
+	assert_eq(Art.HEAD_NAMES.size(), PlayerSlot.HEAD_OPTIONS)
+	assert_eq(Art.CLOTHES_NAMES.size(), PlayerSlot.CLOTHES_OPTIONS)
+	assert_eq(Art.SHOES_NAMES.size(), PlayerSlot.SHOES_OPTIONS)
 	assert_eq(Art.option_name(Art.Layer.HEAD, 0), "NONE")
 	assert_eq(Art.option_name(Art.Layer.HEAD, 1), "CAP")
+	assert_eq(Art.option_name(Art.Layer.HEAD, 4), "EARS")
+	assert_eq(Art.option_name(Art.Layer.HEAD, 8), "ANTENNA")
 	assert_eq(Art.option_name(Art.Layer.CLOTHES, 0), "TUNIC")
+	assert_eq(Art.option_name(Art.Layer.CLOTHES, 4), "SKIRT")
+	assert_eq(Art.option_name(Art.Layer.CLOTHES, 6), "TUTU")
 	assert_eq(Art.option_name(Art.Layer.SHOES, 3), "PACK")
-	assert_eq(Art.option_name(Art.Layer.HEAD, 4), "NONE", "names wrap with the index")
+	assert_eq(Art.option_name(Art.Layer.HEAD, PlayerSlot.HEAD_OPTIONS), "NONE", "names wrap with the index")
+	assert_eq(Art.option_name(Art.Layer.CLOTHES, PlayerSlot.CLOTHES_OPTIONS), "TUNIC")
 
 func test_layer_and_option_cycle_on_a_slot() -> void:
 	var slot: PlayerSlot = PlayerSlot.new(0)
@@ -32,7 +40,7 @@ func test_layer_and_option_cycle_on_a_slot() -> void:
 	assert_eq(slot.hat, 1, "cycling clothes must not move the hat")
 	slot.cycle_layer(-1)
 	slot.cycle_option(-2)
-	assert_eq(slot.hat, 3, "left from CAP wraps to BALL")
+	assert_eq(slot.hat, PlayerSlot.HEAD_OPTIONS - 1, "left from CAP wraps to the last head")
 	slot.cycle_layer(-1)
 	assert_eq(slot.customize_layer, Art.Layer.SHOES, "up from HEAD wraps to SHOES")
 
