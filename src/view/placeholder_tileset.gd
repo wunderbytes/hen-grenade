@@ -33,3 +33,4 @@ static func build(tile_colors: Array[Color]) -> TileSet:
 const FLOOR: int = 0
 const HARD: int = 1
 const CRATE: int = 2
+const SLIPPERY: int = 3

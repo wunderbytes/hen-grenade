@@ -7,7 +7,7 @@ class_name Arena
 ## because a packed array of bytes is the cheapest thing the Pi has to touch
 ## when the view syncs.
 
-enum Tile { FLOOR = 0, HARD = 1, CRATE = 2 }
+enum Tile { FLOOR = 0, HARD = 1, CRATE = 2, SLIPPERY = 3 }
 
 var w: int = 0
 var h: int = 0
@@ -40,9 +40,14 @@ func set_at(t: Vector2i, value: int) -> void:
 
 ## Solid to movement and to blast rays. Bombs are not part of the arena — bomb
 ## solidity has a per-player exemption and therefore lives on MatchState.
+## Slippery tiles are floor: they do not stop a ray and they do not stop a body,
+## but a body that is on one cannot choose to stand still. See Sim._move.
 func is_solid(t: Vector2i) -> bool:
 	var tile: int = at(t)
 	return tile == Tile.HARD or tile == Tile.CRATE
+
+func is_slippery(t: Vector2i) -> bool:
+	return at(t) == Tile.SLIPPERY
 
 ## Interior tiles that are not lattice pillars — the tiles a crate could ever
 ## occupy. 233 on a 25 x 15 grid. The crate cap is a permille of this rather than

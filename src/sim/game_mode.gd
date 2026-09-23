@@ -27,7 +27,11 @@ const HEN_RULES_PATH: String = "res://data/balance/match_hen.tres"
 ## 0 means inherit Balance.crate_cap_permille.
 @export var crate_cap_permille: int = 0
 ## Effective speed while living as the Hen. Unused in deathmatch.
+## 6 is a step under the original half-speed 8 (base hunter speed is 15).
 @export var hen_speed_units: int = 8
+## Ticks an egg sits before it hatches. 0 in deathmatch, so the rules fingerprint
+## does not mix it and a deathmatch replay stays valid. 8 s at 60 Hz in Hen.
+@export var egg_hatch_ticks: int = 0
 @export var scoring: Scoring = Scoring.KILLS
 ## Above the sim. Not fingerprinted.
 @export var match_rules_path: String = DEATHMATCH_RULES_PATH
@@ -57,6 +61,10 @@ func fingerprint() -> int:
 	h = SimHash.mix_int(h, crate_scale_permille)
 	h = SimHash.mix_int(h, crate_cap_permille)
 	h = SimHash.mix_int(h, hen_speed_units)
+	# Zero in deathmatch. Mixing it always would change every deathmatch rules
+	# fingerprint for a field that mode does not read.
+	if egg_hatch_ticks != 0:
+		h = SimHash.mix_int(h, egg_hatch_ticks)
 	h = SimHash.mix_int(h, int(scoring))
 	return h
 
@@ -70,6 +78,7 @@ static func deathmatch() -> GameMode:
 	mode.crate_scale_permille = 1000
 	mode.crate_cap_permille = 0
 	mode.hen_speed_units = 8
+	mode.egg_hatch_ticks = 0
 	mode.scoring = Scoring.KILLS
 	mode.match_rules_path = DEATHMATCH_RULES_PATH
 	return mode
@@ -84,7 +93,8 @@ static func hen() -> GameMode:
 	mode.round_ticks = 18000
 	mode.crate_scale_permille = 500
 	mode.crate_cap_permille = 250
-	mode.hen_speed_units = 8
+	mode.hen_speed_units = 6
+	mode.egg_hatch_ticks = 8 * C.TICK_HZ
 	mode.scoring = Scoring.HEN_TICKS
 	mode.match_rules_path = HEN_RULES_PATH
 	return mode

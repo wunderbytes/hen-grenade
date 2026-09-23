@@ -32,6 +32,10 @@ enum Kind {
 	# --- M3.5 ---
 	HEN_COLLECTED,
 	HEN_DROPPED,
+	EGG_LAID,
+	EGG_BLOWN,
+	EGG_HATCHED,
+	CHICKEN_BLOWN,
 }
 
 var kind: Kind = Kind.FLAME_LIT
@@ -140,6 +144,23 @@ static func hen_collected(tile: Vector2i, player: int) -> SimEvent:
 ## `player` died as the Hen and dropped the token onto `tile`.
 static func hen_dropped(tile: Vector2i, player: int) -> SimEvent:
 	return _make(Kind.HEN_DROPPED, tile, player, -1, 0)
+
+## `player` (the Hen) laid an egg on `tile`.
+static func egg_laid(tile: Vector2i, player: int) -> SimEvent:
+	return _make(Kind.EGG_LAID, tile, player, -1, 0)
+
+## A blast owned by `player` destroyed the egg on `tile`. The tile is slippery
+## afterwards. `player` is the chain starter.
+static func egg_blown(tile: Vector2i, player: int) -> SimEvent:
+	return _make(Kind.EGG_BLOWN, tile, player, -1, 0)
+
+## The egg on `tile` hatched. A chicken now stands there.
+static func egg_hatched(tile: Vector2i) -> SimEvent:
+	return _make(Kind.EGG_HATCHED, tile, -1, -1, 0)
+
+## A blast owned by `player` removed every chicken on `tile`. The tile is unchanged.
+static func chicken_blown(tile: Vector2i, player: int) -> SimEvent:
+	return _make(Kind.CHICKEN_BLOWN, tile, player, -1, 0)
 
 func _to_string() -> String:
 	return "SimEvent(%s tile=%s player=%d other=%d value=%d)" % [Kind.keys()[kind], str(tile), player, other, value]

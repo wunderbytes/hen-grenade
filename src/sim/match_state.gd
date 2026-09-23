@@ -62,6 +62,11 @@ var hen_token_tile: Vector2i = Vector2i(-1, -1)
 ## Density actually handed to Arena.generate (mode scale applied). Stored in
 ## the replay header so a hen-mode .hgr is self-describing.
 var effective_crate_permille: int = 0
+## How many eggs and live chickens may exist at once. Active roster at round
+## start. 0 in deathmatch, and a zero is not fingerprinted.
+var egg_cap: int = 0
+var eggs: Array[Egg] = []
+var chickens: Array[Chicken] = []
 
 ## Builds a round. `active_slots` is one bool per player slot; inactive slots
 ## keep their array position (so indices stay stable everywhere) but are skipped
@@ -112,6 +117,7 @@ static func create(p_balance: Balance, p_arena_def: ArenaDef, p_seed: int, activ
 		state.players.append(p)
 
 	if state.mode.is_hen():
+		state.egg_cap = state.active_count()
 		_place_hen_token(state)
 
 	return state
@@ -189,15 +195,44 @@ func bomb_index_at(t: Vector2i) -> int:
 
 ## The single source of truth for solidity, per M1 brief §5. HARD and CRATE
 ## always block; a bomb blocks unless it is this player's own-bomb exemption;
-## flames never block.
+## flames never block. An egg blocks everyone except the living Hen, who walks
+## over her own eggs. Chickens do not block: they overlap a hunter and kill them.
 func is_blocked_for(t: Vector2i, player_index: int) -> bool:
 	if arena.is_solid(t):
+		return true
+	if egg_index_at(t) >= 0 and player_index != hen_slot:
 		return true
 	if bomb_index_at(t) < 0:
 		return false
 	if player_index >= 0 and player_index < players.size():
 		return players[player_index].bomb_exempt_tile != t
 	return true
+
+## What a chicken cannot enter: walls, crates, bombs, eggs. Other chickens and
+## players do not count — chickens pass each other and walk onto hunters.
+## Slippery tiles are open; the slide rule handles those.
+func is_blocked_for_chicken(t: Vector2i) -> bool:
+	if arena.is_solid(t):
+		return true
+	if bomb_index_at(t) >= 0:
+		return true
+	return egg_index_at(t) >= 0
+
+func egg_index_at(t: Vector2i) -> int:
+	for i in range(eggs.size()):
+		if eggs[i].tile == t:
+			return i
+	return -1
+
+func chicken_on(t: Vector2i) -> bool:
+	for c in chickens:
+		if c.tile() == t:
+			return true
+	return false
+
+## Eggs plus live chickens. Hatching does not free a slot; blowing either up does.
+func brood_count() -> int:
+	return eggs.size() + chickens.size()
 
 func living_count() -> int:
 	var n: int = 0
@@ -278,6 +313,18 @@ func fingerprint() -> String:
 		h = SimHash.mix_int(h, hen_slot)
 	if hen_token_tile.x >= 0:
 		h = SimHash.mix_vec(h, hen_token_tile)
+	# Empty brood fields are not mixed, so a deathmatch fingerprint stays the
+	# M3 hash. A hen round mixes the cap even before the first egg.
+	if egg_cap > 0:
+		h = SimHash.mix_int(h, egg_cap)
+	if not eggs.is_empty():
+		h = SimHash.mix_int(h, eggs.size())
+		for egg in eggs:
+			h = egg.mix_into(h)
+	if not chickens.is_empty():
+		h = SimHash.mix_int(h, chickens.size())
+		for chicken in chickens:
+			h = chicken.mix_into(h)
 	return SimHash.to_hex(h)
 
 ## One `next_index` into the filtered candidate list. Deathmatch never calls

@@ -55,6 +55,8 @@ func _draw() -> void:
 		return
 	_draw_pickups()
 	_draw_hen_token()
+	_draw_eggs()
+	_draw_chickens()
 
 	var flames: Array[Rect2] = []
 	var flame_ages: PackedFloat32Array = PackedFloat32Array()
@@ -155,6 +157,39 @@ func _draw_hen_token() -> void:
 		c + Vector2(-4, 3),
 	])
 	draw_colored_polygon(chevron, TOKEN_CHEVRON)
+
+const EGG_COLOR := Color8(244, 236, 210)
+const CHICK_COLOR := Color8(242, 196, 72)
+
+## Cream ovals. One circle pass; the Hen's own eggs are obstacles, not pickups.
+func _draw_eggs() -> void:
+	for egg in state.eggs:
+		var c: Vector2 = _tile_px(egg.tile)
+		draw_set_transform(c, 0.0, Vector2(1.15, 0.85))
+		draw_circle(Vector2.ZERO, 5.0, EGG_COLOR)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+## Small yellow bodies, then beaks, so the chickens batch as two passes.
+func _draw_chickens() -> void:
+	if state.chickens.is_empty():
+		return
+	var centres: Array[Vector2] = []
+	var faces: Array[Vector2] = []
+	for c in state.chickens:
+		var face: Vector2 = Vector2(c.dir)
+		if face == Vector2.ZERO:
+			face = Vector2(0, 1)
+		centres.append(_pos_px(c.pos))
+		faces.append(face)
+	for i in range(centres.size()):
+		draw_circle(centres[i], 4.5, CHICK_COLOR)
+	for i in range(centres.size()):
+		var tip: Vector2 = centres[i] + faces[i] * 7.0
+		draw_colored_polygon(PackedVector2Array([
+			tip,
+			centres[i] + faces[i] * 3.0 + Vector2(-faces[i].y, faces[i].x) * 2.0,
+			centres[i] + faces[i] * 3.0 + Vector2(faces[i].y, -faces[i].x) * 2.0,
+		]), Color8(214, 120, 48))
 
 ## Larger oval, comb, beak, tail and legs — a hen silhouette, not a dressed
 ## hunter. Slot colour stays the fill so P2-as-Hen is still blue.

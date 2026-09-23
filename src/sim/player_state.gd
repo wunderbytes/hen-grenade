@@ -62,6 +62,12 @@ var hen_ticks: int = 0
 ## one-way: you can step off your own bomb, never back onto it.
 var bomb_exempt_tile: Vector2i = Vector2i(-1, -1)
 
+## Direction of a forced slide across slippery tiles. ZERO when the player is
+## not sliding. Set when their centre enters ice and cleared when they reach a
+## normal floor centre or stop against an obstacle. Not mixed at ZERO, so a
+## deathmatch fingerprint stays the M3 one.
+var ice_dir: Vector2i = Vector2i.ZERO
+
 ## Previous tick's bomb button, for rising-edge detection. Part of the state
 ## because it has to survive across steps and be captured by the fingerprint —
 ## holding A must not machine-gun bombs, and a replay has to reproduce that.
@@ -113,4 +119,6 @@ func mix_into(h: int) -> int:
 	# Skip the zero default so deathmatch fingerprints stay byte-identical to M3.
 	if hen_ticks != 0:
 		acc = SimHash.mix_int(acc, hen_ticks)
+	if ice_dir != Vector2i.ZERO:
+		acc = SimHash.mix_vec(acc, ice_dir)
 	return acc

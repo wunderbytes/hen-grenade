@@ -252,3 +252,186 @@ func test_hen_crate_cap_and_token_tile_are_respected() -> void:
 	if hen.has_hen_token_on_floor():
 		var keys: Array[String] = SimFixture.tile_keys(Sim._regen_candidates(hen))
 		assert_false(keys.has("%d,%d" % [hen.hen_token_tile.x, hen.hen_token_tile.y]), "token tile is a regen candidate")
+
+# --- Eggs, ice, chickens ------------------------------------------------------
+
+func test_hen_defaults_are_slower_and_hatch_in_eight_seconds() -> void:
+	var shipped: GameMode = GameMode.hen()
+	assert_eq(shipped.hen_speed_units, 6, "hen speed")
+	assert_eq(shipped.egg_hatch_ticks, 8 * C.TICK_HZ, "hatch time")
+	assert_eq(state.egg_cap, 2, "cap is the active roster")
+
+func test_the_bomb_button_lays_an_egg_and_the_cap_is_the_roster() -> void:
+	_claim(0)
+	SimFixture.place(state, 0, Vector2i(5, 5))
+	var laid: Array[SimEvent] = SimFixture.run_ticks(state, SimFixture.frames_for(0, InputFrame.Dir.NONE, true), 1)
+	assert_eq(state.eggs.size(), 1, "no egg")
+	assert_eq(state.eggs[0].tile, state.players[0].tile(), "egg tile")
+	assert_eq(SimFixture.count_of(laid, SimEvent.Kind.EGG_LAID), 1, "no EGG_LAID")
+	assert_eq(SimFixture.count_of(laid, SimEvent.Kind.BOMB_PLACED), 0, "the Hen placed a bomb")
+	# Same tile, still held: one egg, not a stack.
+	SimFixture.run_idle(state, 1)
+	SimFixture.run_ticks(state, SimFixture.frames_for(0, InputFrame.Dir.NONE, true), 1)
+	assert_eq(state.eggs.size(), 1, "stacked an egg")
+	var nest: Vector2i = state.eggs[0].tile
+	SimFixture.run_ticks(state, SimFixture.frames_for(0, InputFrame.Dir.RIGHT), 50)
+	SimFixture.run_idle(state, 1)
+	SimFixture.run_ticks(state, SimFixture.frames_for(0, InputFrame.Dir.NONE, true), 1)
+	assert_eq(state.eggs.size(), 2, "second egg")
+	assert_ne(state.eggs[1].tile, nest, "second egg did not move with her")
+	SimFixture.run_ticks(state, SimFixture.frames_for(0, InputFrame.Dir.RIGHT), 50)
+	SimFixture.run_idle(state, 1)
+	SimFixture.run_ticks(state, SimFixture.frames_for(0, InputFrame.Dir.NONE, true), 1)
+	assert_eq(state.eggs.size(), 2, "laid past the roster cap")
+
+func test_hunters_are_blocked_by_eggs_and_the_hen_walks_over_them() -> void:
+	_claim(0)
+	var nest: Vector2i = Vector2i(6, 5)
+	state.eggs.append(Egg.new(nest, 480))
+	SimFixture.place(state, 0, Vector2i(5, 5))
+	SimFixture.place(state, 1, Vector2i(5, 7))
+	SimFixture.run_ticks(state, SimFixture.frames_for(0, InputFrame.Dir.RIGHT), 40)
+	assert_eq(state.players[0].tile(), nest, "the Hen could not cross her egg")
+	var hunter: PlayerState = state.players[1]
+	SimFixture.place(state, 1, Vector2i(5, 5))
+	var held: Vector2i = hunter.pos
+	SimFixture.run_ticks(state, SimFixture.frames_for(1, InputFrame.Dir.RIGHT), 40)
+	assert_eq(hunter.pos, held, "a hunter walked onto an egg")
+	assert_eq(hunter.tile(), Vector2i(5, 5), "hunter tile")
+
+func test_a_blast_stops_on_an_egg_and_leaves_ice_and_a_free_slot() -> void:
+	_claim(0)
+	var nest: Vector2i = Vector2i(6, 5)
+	state.eggs.append(Egg.new(nest, 480))
+	SimFixture.place(state, 0, Vector2i(2, 2))
+	SimFixture.place(state, 1, Vector2i(2, 3))
+	SimFixture.add_bomb(state, Vector2i(5, 5), 1, 1, 4)
+	var events: Array[SimEvent] = SimFixture.run_idle(state, 2)
+	assert_eq(state.eggs.size(), 0, "egg survived the blast")
+	assert_eq(state.arena.at(nest), Arena.Tile.SLIPPERY, "egg tile did not become ice")
+	assert_eq(state.flame_ttl_at(nest), state.balance.flame_ticks, "no flame on the egg")
+	assert_eq(state.flame_ttl_at(Vector2i(7, 5)), 0, "the ray continued past the egg")
+	assert_eq(SimFixture.count_of(events, SimEvent.Kind.EGG_BLOWN), 1, "no EGG_BLOWN")
+	# The slot is free again.
+	SimFixture.place(state, 0, Vector2i(4, 4))
+	state.hen_slot = 0
+	SimFixture.run_ticks(state, SimFixture.frames_for(0, InputFrame.Dir.NONE, true), 1)
+	assert_eq(state.eggs.size(), 1, "freed slot did not accept an egg")
+
+func test_an_egg_hatches_after_its_timer_and_keeps_the_slot() -> void:
+	mode.egg_hatch_ticks = 5
+	_claim(0)
+	SimFixture.run_ticks(state, SimFixture.frames_for(0, InputFrame.Dir.NONE, true), 1)
+	var laid_at: int = state.tick
+	SimFixture.run_idle(state, 4)
+	assert_eq(state.tick, laid_at + 4, "timer tick")
+	assert_eq(state.eggs.size(), 1, "hatched early")
+	assert_eq(state.chickens.size(), 0, "chicken early")
+	var events: Array[SimEvent] = SimFixture.run_idle(state, 1)
+	assert_eq(state.eggs.size(), 0, "egg remained")
+	assert_eq(state.chickens.size(), 1, "no chicken")
+	assert_eq(state.brood_count(), 1, "hatching freed a slot")
+	assert_eq(SimFixture.count_of(events, SimEvent.Kind.EGG_HATCHED), 1, "no EGG_HATCHED")
+	# The chicken still holds its slot. A second bird fills a two-player cap.
+	state.chickens.append(Chicken.new(Sim.tile_centre(Vector2i(10, 5))))
+	SimFixture.place(state, 0, Vector2i(4, 4))
+	SimFixture.run_idle(state, 1)
+	SimFixture.run_ticks(state, SimFixture.frames_for(0, InputFrame.Dir.NONE, true), 1)
+	assert_eq(state.eggs.size(), 0, "laid while the brood was full")
+
+func test_chickens_kill_hunters_only_and_the_victim_respawns() -> void:
+	_claim(0)
+	var hunter: PlayerState = SimFixture.place(state, 1, Vector2i(8, 5))
+	var hen: PlayerState = state.players[0]
+	var score_before: int = hunter.score
+	var hen_score: int = hen.score
+	state.chickens.append(Chicken.new(Sim.tile_centre(hunter.tile())))
+	state.chickens.append(Chicken.new(Sim.tile_centre(hen.tile())))
+	var events: Array[SimEvent] = SimFixture.run_idle(state, 1)
+	assert_false(hunter.alive, "hunter survived a chicken")
+	assert_true(hen.alive, "the Hen died to her own chicken")
+	assert_eq(hunter.deaths, 1, "death not counted")
+	assert_eq(hunter.score, score_before, "chicken awarded a score")
+	assert_eq(hen.score, hen_score, "hen score moved")
+	assert_eq(hen.kills, 0, "hen was credited the kill")
+	var died: SimEvent = SimFixture.first_of(events, SimEvent.Kind.PLAYER_DIED)
+	assert_not_null(died, "no death event")
+	assert_eq(died.other, -1, "a player was credited")
+	SimFixture.run_idle(state, state.balance.respawn_ticks + 2)
+	assert_true(hunter.alive, "hunter did not respawn")
+
+func test_spawn_protection_blocks_a_chicken() -> void:
+	var hunter: PlayerState = SimFixture.place(state, 1, Vector2i(8, 5))
+	hunter.spawn_protect_ticks = 30
+	state.chickens.append(Chicken.new(Sim.tile_centre(hunter.tile())))
+	SimFixture.run_idle(state, 5)
+	assert_true(hunter.alive, "spawn protection ignored a chicken")
+
+func test_a_blast_removes_a_chicken_without_leaving_ice() -> void:
+	_claim(0)
+	var at: Vector2i = Vector2i(6, 5)
+	state.chickens.append(Chicken.new(Sim.tile_centre(at)))
+	SimFixture.place(state, 0, Vector2i(2, 2))
+	SimFixture.place(state, 1, Vector2i(2, 3))
+	SimFixture.add_bomb(state, Vector2i(5, 5), 1, 1, 3)
+	var events: Array[SimEvent] = SimFixture.run_idle(state, 2)
+	assert_eq(state.chickens.size(), 0, "chicken survived")
+	assert_eq(state.arena.at(at), Arena.Tile.FLOOR, "chicken left ice")
+	assert_eq(state.flame_ttl_at(Vector2i(7, 5)), 0, "the ray continued past the chicken")
+	assert_eq(SimFixture.count_of(events, SimEvent.Kind.CHICKEN_BLOWN), 1, "no CHICKEN_BLOWN")
+	SimFixture.place(state, 0, Vector2i(4, 4))
+	state.hen_slot = 0
+	SimFixture.run_ticks(state, SimFixture.frames_for(0, InputFrame.Dir.NONE, true), 1)
+	assert_eq(state.eggs.size(), 1, "chicken slot did not free")
+
+func test_ice_carries_you_to_the_next_floor_and_ignores_a_turn() -> void:
+	# Hunter speed, so the slide is not the Hen override. Two ice tiles, then floor.
+	var hunter: PlayerState = SimFixture.place(state, 1, Vector2i(5, 5))
+	SimFixture.place(state, 0, Vector2i(2, 2))
+	state.arena.set_at(Vector2i(6, 5), Arena.Tile.SLIPPERY)
+	state.arena.set_at(Vector2i(7, 5), Arena.Tile.SLIPPERY)
+	SimFixture.run_ticks(state, SimFixture.frames_for(1, InputFrame.Dir.RIGHT), 12)
+	assert_eq(hunter.tile(), Vector2i(6, 5), "never entered the ice")
+	assert_eq(hunter.ice_dir, Vector2i(1, 0), "entry direction")
+	var y: int = hunter.pos.y
+	var arrived: bool = false
+	for _i in range(80):
+		SimFixture.run_ticks(state, SimFixture.frames_for(1, InputFrame.Dir.UP), 1)
+		assert_eq(hunter.pos.y, y, "turned while sliding")
+		if hunter.pos == Sim.tile_centre(Vector2i(8, 5)):
+			arrived = true
+			break
+	assert_true(arrived, "did not stop on the floor past the ice")
+	assert_eq(hunter.ice_dir, Vector2i.ZERO, "slide did not end")
+	var parked: Vector2i = hunter.pos
+	SimFixture.run_idle(state, 10)
+	assert_eq(hunter.pos, parked, "could not stop on the floor")
+
+func test_ice_stops_on_the_slippery_tile_when_the_next_cell_is_blocked() -> void:
+	var hunter: PlayerState = SimFixture.place(state, 1, Vector2i(5, 5))
+	SimFixture.place(state, 0, Vector2i(2, 2))
+	state.arena.set_at(Vector2i(6, 5), Arena.Tile.SLIPPERY)
+	state.arena.set_at(Vector2i(7, 5), Arena.Tile.HARD)
+	SimFixture.run_ticks(state, SimFixture.frames_for(1, InputFrame.Dir.RIGHT), 40)
+	assert_eq(hunter.pos, Sim.tile_centre(Vector2i(6, 5)), "did not stop against the wall")
+	assert_eq(hunter.ice_dir, Vector2i.ZERO, "slide stayed locked against the wall")
+	SimFixture.run_ticks(state, SimFixture.frames_for(1, InputFrame.Dir.UP), 20)
+	assert_eq(hunter.tile().y, 4, "could not leave once the slide had ended")
+
+func test_a_chicken_keeps_its_direction_across_ice() -> void:
+	# Only one way off the start tile, then an open side-lane on the ice that a
+	# retarget would be free to take.
+	state.arena.set_at(Vector2i(4, 5), Arena.Tile.HARD)
+	state.arena.set_at(Vector2i(5, 4), Arena.Tile.HARD)
+	state.arena.set_at(Vector2i(5, 6), Arena.Tile.HARD)
+	state.arena.set_at(Vector2i(6, 5), Arena.Tile.SLIPPERY)
+	state.arena.set_at(Vector2i(7, 5), Arena.Tile.SLIPPERY)
+	var bird: Chicken = Chicken.new(Sim.tile_centre(Vector2i(5, 5)))
+	state.chickens.append(bird)
+	var left_row: bool = false
+	for _i in range(80):
+		SimFixture.run_idle(state, 1)
+		if bird.tile().x < 8 and bird.tile().y != 5:
+			left_row = true
+	assert_false(left_row, "chicken turned off the ice")
+	assert_true(bird.tile().x >= 8, "chicken did not cross the ice")

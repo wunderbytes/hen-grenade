@@ -84,7 +84,7 @@ func _generate(spec: Dictionary) -> bool:
 	var action_cooldown: PackedInt32Array = PackedInt32Array([0, 0, 0, 0])
 	var counts: Dictionary = {
 		"dropped": 0, "taken": 0, "regen": 0, "kicked": 0, "tossed": 0, "cursed": 0,
-		"hen_collected": 0, "hen_dropped": 0,
+		"hen_collected": 0, "hen_dropped": 0, "egg_laid": 0, "egg_hatched": 0,
 	}
 
 	for _tick in range(TICKS):
@@ -99,6 +99,9 @@ func _generate(spec: Dictionary) -> bool:
 			var bomb: bool = false
 			if bomb_cooldown[slot] > 0:
 				bomb_cooldown[slot] -= 1
+			elif mode.is_hen() and state.hen_slot == slot and input_rng.next_below(24) == 0:
+				bomb = true
+				bomb_cooldown[slot] = 18
 			elif mode.is_hen() and state.hen_slot >= 0 and slot != state.hen_slot:
 				bomb = true
 				bomb_cooldown[slot] = 12
@@ -127,6 +130,8 @@ func _generate(spec: Dictionary) -> bool:
 				SimEvent.Kind.CURSE_APPLIED: counts["cursed"] += 1
 				SimEvent.Kind.HEN_COLLECTED: counts["hen_collected"] += 1
 				SimEvent.Kind.HEN_DROPPED: counts["hen_dropped"] += 1
+				SimEvent.Kind.EGG_LAID: counts["egg_laid"] += 1
+				SimEvent.Kind.EGG_HATCHED: counts["egg_hatched"] += 1
 
 	if mode.is_hen():
 		if int(counts["hen_collected"]) < 2 or int(counts["hen_dropped"]) < 1:
@@ -172,6 +177,8 @@ func _generate(spec: Dictionary) -> bool:
 	if mode.is_hen():
 		print("hen collected       : %d" % counts["hen_collected"])
 		print("hen dropped         : %d" % counts["hen_dropped"])
+		print("eggs laid           : %d" % counts["egg_laid"])
+		print("eggs hatched        : %d" % counts["egg_hatched"])
 	print("pickups on the floor: %d" % state.pickup_count())
 	var scores: PackedStringArray = PackedStringArray()
 	for p in state.players:

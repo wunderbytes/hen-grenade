@@ -119,6 +119,12 @@ static func step(state: MatchState, inputs: Array[InputFrame]) -> Array[SimEvent
 	_tick_bombs(state, events, remote_fire)
 	_resolve_deaths(state, events)
 	_tick_hen(state)
+	# After blasts, so an egg that a bomb catches this tick is ice, not a chicken.
+	# Chickens move after they hatch, and they kill after they have moved, so a
+	# bird that steps onto a hunter does it on the tick it arrives.
+	_tick_eggs(state, events)
+	_tick_chickens(state)
+	_resolve_chicken_kills(state, events)
 	_tick_respawns(state, events)
 	_tick_spawn_protection(state)
 	_tick_curses(state, events)
@@ -203,6 +209,7 @@ static func _player_actions(state: MatchState, p: PlayerState, frame: InputFrame
 
 static func _try_place_bomb(state: MatchState, p: PlayerState, events: Array[SimEvent]) -> void:
 	if p.index == state.hen_slot:
+		_try_lay_egg(state, p, events)
 		return
 	if p.bombs_active >= p.bomb_capacity:
 		return
@@ -226,6 +233,26 @@ static func _try_place_bomb(state: MatchState, p: PlayerState, events: Array[Sim
 	p.spawn_protect_ticks = 0
 	events.append(SimEvent.bomb_placed(t, p.index, bomb.radius))
 
+## The bomb button, while Hen. One egg on the tile she is standing on. The brood
+## cap is the active roster at round start; eggs and live chickens share it, and
+## a press on a full brood or a busy tile does nothing.
+static func _try_lay_egg(state: MatchState, p: PlayerState, events: Array[SimEvent]) -> void:
+	if state.egg_cap <= 0 or state.brood_count() >= state.egg_cap:
+		return
+	var t: Vector2i = p.tile()
+	# Floor, or ice she has been forced to stop on. A wall is not a nest.
+	if state.arena.at(t) != Arena.Tile.FLOOR and not state.arena.is_slippery(t):
+		return
+	if state.bomb_index_at(t) >= 0 or state.egg_index_at(t) >= 0:
+		return
+	if state.chicken_on(t) or state.has_pickup_at(t):
+		return
+	var hatch: int = state.mode.egg_hatch_ticks if state.mode != null else 0
+	if hatch <= 0:
+		return
+	state.eggs.append(Egg.new(t, hatch))
+	events.append(SimEvent.egg_laid(t, p.index))
+
 # --- Movement ---------------------------------------------------------------
 
 ## Moves one player one tick. See M1 brief §5 for the reasoning; the short
@@ -236,30 +263,42 @@ static func _try_place_bomb(state: MatchState, p: PlayerState, events: Array[Sim
 ## `dir` is passed in rather than read off the frame because a curse may have
 ## rewritten it (M3 brief §4.4).
 static func _move(state: MatchState, p: PlayerState, dir: InputFrame.Dir, events: Array[SimEvent]) -> void:
-	if dir == InputFrame.Dir.NONE:
+	# A slide in progress ignores the stick. Releasing the stick does not stop
+	# you on ice, and a new direction does not turn you until the slide ends.
+	var lock: Vector2i = _ice_lock(state, p)
+	var locked: bool = lock != Vector2i.ZERO
+	var use_dir: InputFrame.Dir = _vec_to_dir(lock) if locked else dir
+	if use_dir == InputFrame.Dir.NONE:
 		return
-	p.facing = dir
+	p.facing = use_dir
 
-	var d: Vector2i = dir_vec(dir)
+	var d: Vector2i = dir_vec(use_dir)
 	var cur: Vector2i = p.tile()
 	var ahead: Vector2i = cur + d
 	var horiz: bool = d.x != 0
 	var blocked: bool = state.is_blocked_for(ahead, p.index)
+	# Once the centre has left the ice, the slide finishes on the first normal
+	# floor centre. Clamp there even though the tile beyond is open.
+	var stop_at_centre: bool = locked and not state.arena.is_slippery(cur)
+	var clamp: bool = blocked or stop_at_centre
 	var speed: int = _speed_of(state, p)
 	var centre: Vector2i = tile_centre(cur)
+	var before: Vector2i = p.pos
 
 	# Kick fires from here, because "walking into a bomb" is a movement event and
 	# there is no button to hang it off. The player is still blocked this tick —
 	# the bomb has not stepped yet — so they push it and then follow it.
-	if blocked and p.has_kick and not state.arena.is_solid(ahead):
+	# A forced slide does not kick: the bomb is just the obstacle that ends it.
+	if not locked and blocked and p.has_kick and not state.arena.is_solid(ahead):
 		_try_kick(state, p, ahead, d, events)
 
-	if blocked and _try_corner_assist(state, p, cur, d, horiz, speed):
+	if not locked and blocked and _try_corner_assist(state, p, cur, d, horiz, speed):
+		_ice_capture(state, p, _dominant_axis(p.pos - before))
 		return
 
 	if horiz:
 		var nx: int = p.pos.x + d.x * speed
-		if blocked:
+		if clamp:
 			# Stop with the centre on this tile's centre, but never move back.
 			if d.x > 0:
 				nx = maxi(mini(nx, centre.x), p.pos.x)
@@ -268,12 +307,66 @@ static func _move(state: MatchState, p: PlayerState, dir: InputFrame.Dir, events
 		p.pos = Vector2i(nx, _toward(p.pos.y, centre.y, speed))
 	else:
 		var ny: int = p.pos.y + d.y * speed
-		if blocked:
+		if clamp:
 			if d.y > 0:
 				ny = maxi(mini(ny, centre.y), p.pos.y)
 			else:
 				ny = mini(maxi(ny, centre.y), p.pos.y)
 		p.pos = Vector2i(_toward(p.pos.x, centre.x, speed), ny)
+	_ice_capture(state, p, d)
+
+## Forced slide direction for this tick, or ZERO to follow input.
+##
+## The slide ends — and input works again — when the player is already standing
+## on the centre of a tile they cannot continue through: a normal floor, or a
+## slippery tile whose next cell is blocked. Until then the entry direction wins.
+static func _ice_lock(state: MatchState, p: PlayerState) -> Vector2i:
+	if p.ice_dir == Vector2i.ZERO:
+		return Vector2i.ZERO
+	var cur: Vector2i = p.tile()
+	var on_ice: bool = state.arena.is_slippery(cur)
+	var at_centre: bool = p.pos == tile_centre(cur)
+	var ahead_blocked: bool = state.is_blocked_for(cur + p.ice_dir, p.index)
+	if at_centre and (not on_ice or ahead_blocked):
+		p.ice_dir = Vector2i.ZERO
+		return Vector2i.ZERO
+	return p.ice_dir
+
+## Records an entry onto ice, and drops the lock once a slide has arrived.
+static func _ice_capture(state: MatchState, p: PlayerState, travel: Vector2i) -> void:
+	var cur: Vector2i = p.tile()
+	var on_ice: bool = state.arena.is_slippery(cur)
+	if on_ice and p.ice_dir == Vector2i.ZERO and travel != Vector2i.ZERO:
+		# Already parked against the obstacle. Holding that direction is not a
+		# new entry, or the slide would lock again the tick it ended.
+		if p.pos == tile_centre(cur) and state.is_blocked_for(cur + travel, p.index):
+			return
+		p.ice_dir = travel
+		return
+	if p.ice_dir == Vector2i.ZERO:
+		return
+	if p.pos != tile_centre(cur):
+		return
+	if not on_ice or state.is_blocked_for(cur + p.ice_dir, p.index):
+		p.ice_dir = Vector2i.ZERO
+
+static func _vec_to_dir(v: Vector2i) -> InputFrame.Dir:
+	if v == DIRS[0]:
+		return InputFrame.Dir.UP
+	if v == DIRS[1]:
+		return InputFrame.Dir.RIGHT
+	if v == DIRS[2]:
+		return InputFrame.Dir.DOWN
+	if v == DIRS[3]:
+		return InputFrame.Dir.LEFT
+	return InputFrame.Dir.NONE
+
+static func _dominant_axis(delta: Vector2i) -> Vector2i:
+	if delta == Vector2i.ZERO:
+		return Vector2i.ZERO
+	if absi(delta.x) >= absi(delta.y):
+		return Vector2i(signi(delta.x), 0)
+	return Vector2i(0, signi(delta.y))
 
 ## Corner assist. Fires only when the way ahead is blocked and the player is
 ## *already leaning* toward an adjacent lane that is open in the direction of
@@ -372,7 +465,11 @@ static func _slide_bombs(state: MatchState, events: Array[SimEvent]) -> void:
 static func _can_hold_bomb(state: MatchState, t: Vector2i) -> bool:
 	if not state.arena.in_bounds(t):
 		return false
-	if state.arena.at(t) != Arena.Tile.FLOOR:
+	var tile: int = state.arena.at(t)
+	# Ice is still floor for a bomb. An egg is an obstacle, same as a crate.
+	if tile != Arena.Tile.FLOOR and tile != Arena.Tile.SLIPPERY:
+		return false
+	if state.egg_index_at(t) >= 0 or state.chicken_on(t):
 		return false
 	return state.bomb_index_at(t) < 0
 
@@ -631,6 +728,8 @@ static func _detonate_chain(state: MatchState, root: int, events: Array[SimEvent
 			owner_player.bombs_active = maxi(0, owner_player.bombs_active - 1)
 		events.append(SimEvent.bomb_exploded(b.tile, b.owner, chain_owner, b.radius))
 		_lay_flame(state, b.tile, chain_owner, events)
+		# A chicken standing on the bomb is caught, and the blast still spreads.
+		_blow_chickens(state, b.tile, chain_owner, events)
 
 		for d in DIRS:
 			for step_n in range(1, b.radius + 1):
@@ -644,6 +743,11 @@ static func _detonate_chain(state: MatchState, root: int, events: Array[SimEvent
 					_lay_flame(state, t, chain_owner, events)
 					broken.append(t)
 					break                      # exactly one crate per direction
+				# An egg or a chicken stops the ray the way a crate does. The egg
+				# leaves ice; the chicken leaves whatever tile it was standing on.
+				if _blow_egg(state, t, chain_owner, events) or _blow_chickens(state, t, chain_owner, events):
+					_lay_flame(state, t, chain_owner, events)
+					break
 				_lay_flame(state, t, chain_owner, events)
 				var other: int = state.bomb_index_at(t)
 				if other >= 0 and not state.bombs[other].exploded and not queue.has(other):
@@ -661,6 +765,104 @@ static func _reap_bombs(state: MatchState) -> void:
 			kept.append(b)
 	state.bombs = kept
 
+## Removes the egg on `t`, turns that tile into ice, and frees its brood slot.
+## Returns false when there is nothing there, so the ray continues.
+static func _blow_egg(state: MatchState, t: Vector2i, owner: int, events: Array[SimEvent]) -> bool:
+	var i: int = state.egg_index_at(t)
+	if i < 0:
+		return false
+	state.eggs.remove_at(i)
+	state.arena.set_at(t, Arena.Tile.SLIPPERY)
+	events.append(SimEvent.egg_blown(t, owner))
+	return true
+
+## Removes every chicken whose centre is on `t`. Does not change the tile.
+static func _blow_chickens(state: MatchState, t: Vector2i, owner: int, events: Array[SimEvent]) -> bool:
+	var hit: bool = false
+	for i in range(state.chickens.size() - 1, -1, -1):
+		if state.chickens[i].tile() == t:
+			state.chickens.remove_at(i)
+			hit = true
+	if hit:
+		events.append(SimEvent.chicken_blown(t, owner))
+	return hit
+
+## Ages eggs that survived this tick's blasts. A counter of N hatches on the
+## tick after N ages, the same convention as a bomb fuse.
+static func _tick_eggs(state: MatchState, events: Array[SimEvent]) -> void:
+	if state.eggs.is_empty():
+		return
+	var kept: Array[Egg] = []
+	for egg in state.eggs:
+		if egg.hatch_ticks <= 0:
+			state.chickens.append(Chicken.new(tile_centre(egg.tile)))
+			events.append(SimEvent.egg_hatched(egg.tile))
+			continue
+		egg.hatch_ticks -= 1
+		kept.append(egg)
+	state.eggs = kept
+
+## One step per chicken, in array order. A decision — one PRNG draw — happens
+## only when the bird is standing on a tile centre and is not already committed
+## to crossing ice. Deathmatch has no chickens, so it spends no draws here.
+static func _tick_chickens(state: MatchState) -> void:
+	if state.chickens.is_empty():
+		return
+	var speed: int = state.balance.move_speed_units
+	for c in state.chickens:
+		var cur: Vector2i = c.tile()
+		var at_centre: bool = c.pos == tile_centre(cur)
+		var slipping: bool = state.arena.is_slippery(cur) and c.dir != Vector2i.ZERO and not state.is_blocked_for_chicken(cur + c.dir)
+		if at_centre and not slipping:
+			c.dir = _pick_chicken_dir(state, cur)
+		if c.dir == Vector2i.ZERO:
+			continue
+		var next: Vector2i = cur + c.dir
+		if state.is_blocked_for_chicken(next):
+			# Something landed in front mid-step. Walk back to this centre, then
+			# choose again next tick. No draw on the way back.
+			if not at_centre:
+				c.pos = _step_cardinal(c.pos, tile_centre(cur), speed)
+			c.dir = Vector2i.ZERO
+			continue
+		c.pos = _step_cardinal(c.pos, tile_centre(next), speed)
+
+static func _pick_chicken_dir(state: MatchState, tile: Vector2i) -> Vector2i:
+	var open: Array[Vector2i] = []
+	for d in DIRS:
+		if not state.is_blocked_for_chicken(tile + d):
+			open.append(d)
+	if open.is_empty():
+		return Vector2i.ZERO
+	return open[state.rng.next_index(open.size())]
+
+static func _step_cardinal(pos: Vector2i, target: Vector2i, speed: int) -> Vector2i:
+	return Vector2i(_toward(pos.x, target.x, speed), _toward(pos.y, target.y, speed))
+
+## Hunters sharing a tile with a chicken die and respawn. The Hen does not.
+## No kill-score either way: the bird is the arena, not a player. Spawn
+## protection blocks the hit, same as a flame.
+static func _resolve_chicken_kills(state: MatchState, events: Array[SimEvent]) -> void:
+	if state.chickens.is_empty():
+		return
+	for p in state.players:
+		if not p.active or not p.alive:
+			continue
+		if p.spawn_protect_ticks > 0:
+			continue
+		if p.index == state.hen_slot:
+			continue
+		if not state.chicken_on(p.tile()):
+			continue
+		var t: Vector2i = p.tile()
+		p.alive = false
+		p.deaths += 1
+		p.respawn_ticks = state.balance.respawn_ticks
+		p.ice_dir = Vector2i.ZERO
+		p.clear_bomb_exemption()
+		events.append(SimEvent.player_died(t, p.index, -1))
+		_lose_kit(state, p, t, events)
+
 # --- Death, respawn, clock --------------------------------------------------
 
 static func _resolve_deaths(state: MatchState, events: Array[SimEvent]) -> void:
@@ -676,6 +878,7 @@ static func _resolve_deaths(state: MatchState, events: Array[SimEvent]) -> void:
 		p.alive = false
 		p.deaths += 1
 		p.respawn_ticks = state.balance.respawn_ticks
+		p.ice_dir = Vector2i.ZERO
 		p.clear_bomb_exemption()
 		# The victim's own live bombs keep burning and keep their ownership: a
 		# bomb outlives its owner and can still score for them.
@@ -708,6 +911,8 @@ static func _choose_token_drop_tile(state: MatchState, from: Vector2i) -> Vector
 		if state.arena.at(t) != Arena.Tile.FLOOR:
 			continue
 		if state.bomb_index_at(t) >= 0:
+			continue
+		if state.egg_index_at(t) >= 0 or state.chicken_on(t):
 			continue
 		if state.has_pickup_at(t):
 			continue
@@ -822,6 +1027,8 @@ static func _can_hold_pickup(state: MatchState, t: Vector2i) -> bool:
 		return false
 	if state.has_pickup_at(t):
 		return false
+	if state.egg_index_at(t) >= 0 or state.chicken_on(t):
+		return false
 	if t == state.hen_token_tile:
 		return false
 	if state.flame_ttl_at(t) > 0:
@@ -843,6 +1050,7 @@ static func _tick_respawns(state: MatchState, events: Array[SimEvent]) -> void:
 		p.pos = tile_centre(t)
 		p.alive = true
 		p.spawn_protect_ticks = state.balance.spawn_protect_ticks
+		p.ice_dir = Vector2i.ZERO
 		p.clear_bomb_exemption()
 		events.append(SimEvent.player_respawned(t, p.index, p.spawn_protect_ticks))
 
@@ -921,6 +1129,8 @@ static func _regen_candidates(state: MatchState) -> Array[Vector2i]:
 			if state.bomb_index_at(t) >= 0:
 				continue
 			if state.has_pickup_at(t):
+				continue
+			if state.egg_index_at(t) >= 0 or state.chicken_on(t):
 				continue
 			if t == state.hen_token_tile:
 				continue
@@ -1021,6 +1231,8 @@ static func _respawn_score(state: MatchState, t: Vector2i, threats: Array[Vector
 	if state.flame_ttl_at(t) > 0:
 		return -1
 	if state.bomb_index_at(t) >= 0:
+		return -1
+	if state.egg_index_at(t) >= 0 or state.chicken_on(t):
 		return -1
 	if threats.is_empty():
 		return state.arena.w + state.arena.h

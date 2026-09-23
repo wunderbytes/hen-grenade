@@ -13,9 +13,10 @@ extends TileMapLayer
 const FLOOR_COLOR: Color = Color8(40, 44, 52)
 const HARD_COLOR: Color = Color8(170, 176, 188)
 const CRATE_COLOR: Color = Color8(150, 100, 60)
+const SLIPPERY_COLOR: Color = Color8(168, 206, 214)
 
 func setup() -> void:
-	tile_set = PlaceholderTileset.build([FLOOR_COLOR, HARD_COLOR, CRATE_COLOR])
+	tile_set = PlaceholderTileset.build([FLOOR_COLOR, HARD_COLOR, CRATE_COLOR, SLIPPERY_COLOR])
 	position = Vector2(C.ARENA_ORIGIN)
 
 ## Full rebuild. Called once per round, not per frame.
@@ -40,8 +41,13 @@ func clear_crate(tile: Vector2i) -> void:
 func set_crate(tile: Vector2i) -> void:
 	set_cell(tile, 0, Vector2i(PlaceholderTileset.CRATE, 0))
 
+## A blown egg. One cell, same as a crate landing — the arena is not rebuilt.
+func set_slippery(tile: Vector2i) -> void:
+	set_cell(tile, 0, Vector2i(PlaceholderTileset.SLIPPERY, 0))
+
 func _atlas_for(tile_type: int) -> int:
 	match tile_type:
 		Arena.Tile.HARD: return PlaceholderTileset.HARD
 		Arena.Tile.CRATE: return PlaceholderTileset.CRATE
+		Arena.Tile.SLIPPERY: return PlaceholderTileset.SLIPPERY
 	return PlaceholderTileset.FLOOR

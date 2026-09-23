@@ -264,6 +264,8 @@ func _apply_events(events: Array[SimEvent]) -> void:
 				_arena_view.clear_crate(e.tile)
 			SimEvent.Kind.CRATE_SPAWNED:
 				_arena_view.set_crate(e.tile)
+			SimEvent.Kind.EGG_BLOWN:
+				_arena_view.set_slippery(e.tile)
 			SimEvent.Kind.ROUND_ENDED:
 				_end_round()
 
